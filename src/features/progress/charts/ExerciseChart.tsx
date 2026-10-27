@@ -11,11 +11,11 @@ import {
 } from "recharts";
 import type { ExercisePoint } from "./types";
 
-const GRID = "#2a2e26";
-const TICK = "#9aa193";
-const LIME = "#d6ef6e";
-const TEXT = "#f4f5f0";
-const SURFACE = "#1c1f1a";
+const GRID = "#d5e1f0";
+const TICK = "#52627a";
+const LIME = "#1d4ed8";
+const TEXT = "#122033";
+const SURFACE = "#ffffff";
 
 const numberFormat = new Intl.NumberFormat("es-CL", { maximumFractionDigits: 1 });
 

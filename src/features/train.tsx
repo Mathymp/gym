@@ -18,7 +18,7 @@ import { WEEKDAY_LABELS } from "@/lib/format";
 import { dayKindLabel } from "@/lib/metrics";
 import { newId } from "@/lib/utils";
 import { MUSCLE_LABEL, type DayKind, type Exercise, type MuscleGroup, type PlanDay, type PlanExercise, type TrackingType } from "@/lib/types";
-import { MachineMotion } from "@/components/machine-motion";
+import { MachineMotion, machinePhotoSrc } from "@/components/machine-motion";
 import { useActivePlan, useExercises, useOpenSession, usePlans, useRefresh } from "@/features/use-data";
 
 export function TrainScreen() {
@@ -54,24 +54,26 @@ export function TrainScreen() {
         <h1 className="mt-2 text-4xl font-semibold tracking-tight">{plan?.name ?? "Sin rutina"}</h1>
       </header>
       {open.data ? (
-        <Link className="text-sm font-semibold text-lime" to={`/sesion/${open.data.id}`}>Continuar sesión abierta</Link>
+        <Button className="w-full" size="lg" onClick={() => navigate(`/sesion/${open.data!.id}`)}>Continuar sesión abierta</Button>
       ) : null}
       {plan ? (
-        <ul className="border-t border-line">
+        <ul className="flex flex-col gap-2">
           {plan.days.map((day) => (
-            <li key={day.id} className="flex items-center justify-between gap-3 border-b border-line py-4">
-              <div>
-                <p className="font-medium">{WEEKDAY_LABELS[day.weekday]}</p>
-                <p className="text-sm text-muted">{day.label} · {dayKindLabel(day.day_kind)}</p>
-              </div>
-              <Link className="h-11 px-2 text-sm text-lime" to={`/entrenar/rutina/${plan.id}?dia=${day.id}`}>Editar</Link>
+            <li key={day.id}>
+              <Link className="flex min-h-[4.5rem] items-center justify-between gap-3 rounded-[24px] bg-surface px-4 shadow-[0_8px_24px_rgba(18,32,51,0.05)]" to={`/entrenar/rutina/${plan.id}?dia=${day.id}`}>
+                <span>
+                  <span className="block font-semibold">{day.label}</span>
+                  <span className="text-sm text-muted">{WEEKDAY_LABELS[day.weekday]} · {dayKindLabel(day.day_kind)} · {day.exercises.length} ejercicios</span>
+                </span>
+                <span className="rounded-full bg-raised px-3 py-2 text-sm font-semibold text-lime">Editar</span>
+              </Link>
             </li>
           ))}
         </ul>
       ) : (
         <EmptyState title="Todavía no hay rutina" body="Crea una rutina y elige los ejercicios de cada día." />
       )}
-      <Link className="text-sm font-semibold text-lime" to="/entrenar/ejercicios">Biblioteca de ejercicios</Link>
+      <Button size="lg" className="w-full" onClick={() => navigate("/entrenar/ejercicios")}>Biblioteca de ejercicios</Button>
       <section className="flex flex-col gap-3 border-t border-line pt-5">
         <h2 className="text-lg font-semibold">Otra rutina</h2>
         <TextField label="Nombre" value={name} onChange={(event) => setName(event.target.value)} />
@@ -186,7 +188,7 @@ export function PlanEditorScreen() {
         </select>
       </label>
       <label className="block text-sm text-muted">
-        Pasar este día a
+        Pasar este día al lugar de otro
         <select
           className="mt-2 h-12 w-full rounded-2xl border border-line bg-surface px-3"
           value={day.id}
@@ -296,23 +298,39 @@ export function LibraryScreen() {
   if (exercises.isLoading) return <ScreenSkeleton />;
   if (exercises.error) return <Page><InlineError message={humanError(exercises.error)} onRetry={() => void exercises.refetch()} /></Page>;
 
+  const featured = grouped[0] ?? null;
+  const rest = featured ? grouped.slice(1) : grouped;
+
   return (
-    <Page>
-      <Link className="text-sm text-muted" to="/entrenar">Volver</Link>
-      <h1 className="text-4xl font-semibold tracking-tight">Ejercicios</h1>
+    <Page className="gap-4">
+      <Link className="text-sm font-semibold text-lime" to="/entrenar">Volver</Link>
+      <h1 className="text-3xl font-semibold tracking-tight">Ejercicios</h1>
       <TextField label="Buscar" value={query} onChange={(event) => setQuery(event.target.value)} />
-      <div className="flex gap-2 overflow-auto">
+      <div className="no-scrollbar flex gap-2 overflow-auto pb-1">
         <FilterChip label="Todos" selected={group === "todos"} onClick={() => setGroup("todos")} />
         {(Object.keys(MUSCLE_LABEL) as MuscleGroup[]).map((item) => (
           <FilterChip key={item} label={MUSCLE_LABEL[item]} selected={group === item} onClick={() => setGroup(item)} />
         ))}
       </div>
-      <ul>
-        {grouped.map((exercise) => (
+      {featured ? (
+        <button type="button" className="overflow-hidden rounded-[28px] bg-surface text-left shadow-[0_10px_30px_rgba(18,32,51,0.06)]" onClick={() => setOpen(featured)}>
+          <MachineMotion slug={featured.slug} name={featured.name} muscle={featured.muscle_group} />
+          <span className="block px-4 pt-3 text-lg font-semibold">{featured.name}</span>
+          <span className="block px-4 text-sm text-muted">{MUSCLE_LABEL[featured.muscle_group]} · {featured.equipment}</span>
+          <span className="block px-4 pb-4 pt-2 text-sm leading-5 text-foreground"><span className="font-semibold text-lime">Consejo. </span>{featured.instructions}</span>
+        </button>
+      ) : (
+        <EmptyState title="Sin resultados" body="Prueba otro nombre o crea un ejercicio propio." />
+      )}
+      <ul className="flex flex-col gap-2">
+        {rest.map((exercise) => (
           <li key={exercise.id}>
-            <button className="flex min-h-14 w-full items-center justify-between border-b border-line text-left" onClick={() => setOpen(exercise)}>
-              <span>{exercise.name}</span>
-              <span className="text-xs text-faint">{exercise.equipment}</span>
+            <button className="flex min-h-16 w-full items-center gap-3 rounded-2xl bg-surface py-2 pr-4 pl-2 text-left shadow-[0_8px_20px_rgba(18,32,51,0.04)]" onClick={() => setOpen(exercise)}>
+              <img src={machinePhotoSrc(exercise.slug, exercise.muscle_group)} alt="" width={72} height={72} className="h-16 w-16 shrink-0 rounded-xl bg-white object-contain" />
+              <span>
+                <span className="block font-medium">{exercise.name}</span>
+                <span className="text-sm text-muted">{MUSCLE_LABEL[exercise.muscle_group]} · {exercise.equipment}</span>
+              </span>
             </button>
           </li>
         ))}
@@ -330,7 +348,7 @@ export function LibraryScreen() {
 
 function FilterChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
-    <button className={`h-10 shrink-0 px-2 text-sm ${selected ? "text-lime" : "text-muted"}`} onClick={onClick}>
+    <button type="button" className={`h-10 shrink-0 rounded-full px-4 text-sm font-semibold ${selected ? "bg-lime text-ink" : "bg-surface text-muted"}`} onClick={onClick}>
       {label}
     </button>
   );
@@ -344,8 +362,16 @@ function ExerciseDetail({ exercise }: { exercise: Exercise }) {
       <MachineMotion slug={exercise.slug} name={exercise.name} muscle={exercise.muscle_group} />
       {exercise.machine_name ? <p>Máquina: {exercise.machine_name}</p> : null}
       {exercise.secondary_muscles.length > 0 ? <p>También: {exercise.secondary_muscles.join(", ")}</p> : null}
-      <p>{exercise.instructions}</p>
-      <p className="text-muted">Error habitual: {exercise.common_mistakes}</p>
+      <div className="rounded-2xl bg-raised px-4 py-3">
+        <p className="text-xs font-semibold tracking-wide text-lime">Consejo</p>
+        <p className="mt-1">{exercise.instructions}</p>
+      </div>
+      {exercise.common_mistakes ? (
+        <div className="rounded-2xl border border-line px-4 py-3">
+          <p className="text-xs font-semibold tracking-wide text-warning">Evita</p>
+          <p className="mt-1 text-muted">{exercise.common_mistakes}</p>
+        </div>
+      ) : null}
       {alternatives ? <p>Alternativas: {alternatives}</p> : null}
       <Link className="font-semibold text-lime" to={`/progreso/fuerza/${exercise.id}`}>Ver progreso</Link>
     </div>

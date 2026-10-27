@@ -114,27 +114,39 @@ export function SessionScreen() {
   }
 
   return (
-    <div className="mx-auto min-h-dvh w-full max-w-lg pb-10">
-      <header className="sticky top-0 z-30 border-b border-line bg-background/95 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur">
-        <div className="flex items-center justify-between gap-2">
-          <button className="h-12 px-2 text-sm" onClick={() => void togglePause()}>{session.status === "paused" ? "Reanudar" : "Pausar"}</button>
-          <p className="text-2xl font-semibold tabular">{formatClock(elapsed)}</p>
-          <button className="h-12 px-2 text-sm font-semibold text-lime" onClick={() => setConfirmFinish(true)}>Terminar</button>
+    <div className="mx-auto min-h-dvh w-full max-w-lg bg-background pb-8">
+      <header className="px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="rounded-[28px] bg-lime px-4 py-4 text-ink shadow-[0_16px_40px_rgba(29,78,216,0.28)]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm text-white/80">Entrenamiento</p>
+              <h1 className="mt-1 text-2xl font-semibold">{session.title}</h1>
+              <p className="mt-1 text-sm text-white/80">{doneSets} de {allSets} series</p>
+            </div>
+            <button type="button" className="h-11 rounded-full bg-white px-4 text-sm font-semibold text-lime" onClick={() => setConfirmFinish(true)}>
+              Terminar
+            </button>
+          </div>
         </div>
-        <p className="mt-1 text-center text-xs text-muted">{session.title} · {doneSets}/{allSets} series</p>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <p className="text-sm tabular">{restLeft > 0 ? `Descanso ${formatClock(restLeft)}` : "Descanso"}</p>
-          <div className="flex gap-1">
-            {[60, 90, 120].map((seconds) => (
-              <button key={seconds} className={`h-10 px-2 text-sm ${restSeconds === seconds ? "text-lime" : "text-muted"}`} onClick={() => setRestSeconds(seconds)}>
-                {seconds}
-              </button>
-            ))}
-            {restLeft > 0 ? <button className="h-10 px-2 text-sm text-muted" onClick={() => setRestUntil(null)}>Saltar</button> : null}
+        <div className="mt-3 grid grid-cols-[auto_1fr] items-center gap-3 rounded-[28px] bg-surface p-4 shadow-[0_10px_30px_rgba(18,32,51,0.06)]">
+          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-raised">
+            <p className="text-center text-2xl font-semibold tabular text-lime">{restLeft > 0 ? formatClock(restLeft) : formatClock(elapsed)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted">{restLeft > 0 ? "Descanso" : session.status === "paused" ? "En pausa" : "Tiempo"}</p>
+            <p className="mt-1 text-lg font-semibold">{restLeft > 0 ? "Siguiente serie" : session.title}</p>
+            <div className="mt-3 flex gap-2">
+              {[60, 90, 120].map((seconds) => (
+                <button key={seconds} type="button" className={`h-10 min-w-12 rounded-full px-3 text-sm font-semibold ${restSeconds === seconds ? "bg-lime text-ink" : "bg-raised text-muted"}`} onClick={() => setRestSeconds(seconds)}>
+                  {seconds}s
+                </button>
+              ))}
+              {restLeft > 0 ? <button type="button" className="h-10 rounded-full bg-raised px-3 text-sm font-semibold text-foreground" onClick={() => setRestUntil(null)}>Saltar</button> : null}
+            </div>
           </div>
         </div>
       </header>
-      <div className="flex flex-col gap-8 px-4 pt-5">
+      <div className="flex flex-col gap-4 px-4 pt-4">
         {session.exercises.filter((block) => !block.replaced).map((block) => (
           <ExerciseBlock
             key={block.id}
@@ -147,7 +159,8 @@ export function SessionScreen() {
           />
         ))}
         <Button variant="surface" size="lg" onClick={() => setAdding(true)}>Agregar ejercicio</Button>
-        <button className="h-12 text-sm text-danger" onClick={() => setConfirmDiscard(true)}>Descartar esta sesión</button>
+        <Button size="lg" onClick={() => void togglePause()}>{session.status === "paused" ? "Reanudar" : "Pausar"}</Button>
+        <Button variant="danger" size="lg" onClick={() => setConfirmDiscard(true)}>Descartar esta sesión</Button>
       </div>
       <Sheet open={confirmFinish} title="Terminar entrenamiento" onClose={() => setConfirmFinish(false)}>
         <p className="text-sm leading-6 text-muted">Se cierra el cronómetro y verás el resumen con las series que marcaste como hechas.</p>
@@ -190,24 +203,24 @@ function ExerciseBlock({
   onSubstitute: () => void;
 }) {
   return (
-    <section>
+    <section className="rounded-[28px] bg-surface p-4 shadow-[0_10px_30px_rgba(18,32,51,0.06)]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">{block.exercise.name}</h2>
           <p className="text-sm text-muted">{MUSCLE_LABEL[block.exercise.muscle_group]} · {block.exercise.equipment}</p>
         </div>
-        <button className="h-11 text-sm text-lime" onClick={onSubstitute}>Cambiar</button>
+        <Button variant="surface" size="md" onClick={onSubstitute}>Cambiar</Button>
       </div>
       <MachineMotion compact slug={block.exercise.slug} name={block.exercise.name} muscle={block.exercise.muscle_group} />
+      <p className="mt-2 text-sm leading-5"><span className="font-semibold text-lime">Consejo. </span>{block.exercise.instructions}</p>
+      {block.exercise.common_mistakes ? <p className="mt-1 text-sm leading-5 text-muted"><span className="font-semibold">Evita. </span>{block.exercise.common_mistakes}</p> : null}
       {previous ? <p className="mt-2 text-sm text-faint">Última sesión: {previous}</p> : <p className="mt-2 text-sm text-faint">Sin cargas anteriores.</p>}
       <div className="mt-3 flex flex-col gap-2">
         {block.sets.map((set) => (
           <SetRow key={set.id} set={set} tracking={block.exercise.tracking_type} session={session} onSession={onSession} onRest={onRest} />
         ))}
       </div>
-      <button
-        className="mt-3 h-12 text-sm text-lime"
-        onClick={() => {
+      <Button className="mt-3 w-full" variant="surface" onClick={() => {
           const last = block.sets.at(-1);
           const id = newId();
           const created: WorkoutSet = {
@@ -231,11 +244,11 @@ function ExerciseBlock({
         }}
       >
         Agregar serie
-      </button>
+      </Button>
       <label className="mt-2 block text-xs text-faint">
         Nota
         <input
-          className="mt-1 h-11 w-full rounded-xl bg-surface px-3 text-sm text-foreground"
+          className="mt-1 h-11 w-full rounded-xl bg-raised px-3 text-sm text-foreground"
           defaultValue={block.notes}
           placeholder="Opcional"
           onBlur={(event) => {
@@ -289,7 +302,7 @@ function SetRow({
   }
 
   return (
-    <div className={`rounded-2xl px-2 py-2 ${done ? "bg-surface" : ""}`}>
+    <div className={`rounded-2xl px-2 py-2 ${done ? "bg-raised" : ""}`}>
       <div className="mb-1 flex items-center justify-between text-xs text-faint">
         <span>Serie {set.set_index}</span>
         <button

@@ -65,7 +65,7 @@ export function App() {
             </Routes>
           </Suspense>
         </BrowserRouter>
-        <Toaster theme="dark" position="top-center" />
+        <Toaster theme="light" position="top-center" />
       </AuthProvider>
     </QueryClientProvider>
   );

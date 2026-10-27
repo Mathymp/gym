@@ -20,7 +20,7 @@ En el teléfono abre la dirección de GitHub Pages y, si el navegador lo ofrece,
 - Nombre Mathy, 170 cm, peso inicial 83 kg y meta 76 kg
 - Rutina de lunes tren superior A, martes piernas A, jueves tren superior B y viernes piernas B
 - Miércoles, sábado y domingo libres
-- Biblioteca de ejercicios, cada uno con un diagrama animado de la máquina
+- Biblioteca de ejercicios, cada uno con una foto de la máquina en fondo blanco y un consejo de ejecución
 
 Los gráficos usan solo registros reales. Hasta que completes una serie, no hay puntos inventados.
 

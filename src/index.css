@@ -3,24 +3,24 @@
 
 @theme {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --color-background: #0c0d0b;
-  --color-surface: #161814;
-  --color-raised: #1c1f1a;
-  --color-line: #2a2e26;
-  --color-foreground: #f4f5f0;
-  --color-muted: #9aa193;
-  --color-faint: #6d7266;
-  --color-lime: #d6ef6e;
-  --color-lime-deep: #c0dc4e;
-  --color-ink: #142000;
-  --color-danger: #ef6f5e;
-  --color-warning: #e2b15a;
+  --color-background: #f3f6fb;
+  --color-surface: #ffffff;
+  --color-raised: #e7eef8;
+  --color-line: #d5e1f0;
+  --color-foreground: #122033;
+  --color-muted: #52627a;
+  --color-faint: #7d8da3;
+  --color-lime: #1d4ed8;
+  --color-lime-deep: #1e40af;
+  --color-ink: #ffffff;
+  --color-danger: #dc2626;
+  --color-warning: #b45309;
   --radius-xl: 1.25rem;
 }
 
 html {
-  background: #0c0d0b;
-  color: #f4f5f0;
+  background: #f3f6fb;
+  color: #122033;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -28,7 +28,7 @@ body {
   margin: 0;
   min-height: 100dvh;
   font-family: var(--font-sans);
-  background: #0c0d0b;
+  background: #f3f6fb;
   text-rendering: optimizeLegibility;
 }
 
@@ -37,7 +37,6 @@ input,
 textarea,
 select {
   font: inherit;
-  color: inherit;
 }
 
 input[type="number"]::-webkit-inner-spin-button,
@@ -52,17 +51,25 @@ input[type="number"] {
 }
 
 :focus-visible {
-  outline: 2px solid #d6ef6e;
+  outline: 2px solid #1d4ed8;
   outline-offset: 2px;
 }
 
 ::selection {
-  background: #d6ef6e;
-  color: #142000;
+  background: #1d4ed8;
+  color: #ffffff;
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

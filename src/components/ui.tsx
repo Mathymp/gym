@@ -8,10 +8,10 @@ const buttonStyles = cva(
   {
     variants: {
       variant: {
-        primary: "bg-lime text-ink hover:bg-lime-deep",
-        surface: "bg-surface text-foreground hover:bg-raised",
-        ghost: "bg-transparent text-foreground hover:bg-surface",
-        danger: "bg-transparent text-danger",
+        primary: "bg-lime text-ink shadow-[0_10px_24px_rgba(29,78,216,0.28)] hover:bg-lime-deep",
+        surface: "border border-line bg-surface text-foreground shadow-sm hover:bg-raised",
+        ghost: "bg-transparent text-foreground hover:bg-raised",
+        danger: "border border-danger/30 bg-surface text-danger",
       },
       size: {
         md: "h-11 px-4 text-sm",
@@ -95,12 +95,12 @@ export function Sheet({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
-      <button className="absolute inset-0 bg-black/70" aria-label="Cerrar" onClick={onClose} />
+      <button className="absolute inset-0 bg-[#122033]/40" aria-label="Cerrar" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="absolute inset-x-0 bottom-0 mx-auto max-h-[88dvh] w-full max-w-lg overflow-auto rounded-t-3xl border border-line bg-raised px-4 pt-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))]"
+        className="absolute inset-x-0 bottom-0 mx-auto max-h-[88dvh] w-full max-w-lg overflow-auto rounded-t-[28px] bg-surface px-4 pt-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-[0_-12px_40px_rgba(18,32,51,0.16)]"
       >
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-line" />
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -138,7 +138,7 @@ export function Stepper({
     onChange(Math.min(max, Math.max(min, next)));
   };
   return (
-    <div className="flex min-w-0 flex-1 items-center rounded-2xl bg-background">
+    <div className="flex min-w-0 flex-1 items-center rounded-2xl bg-raised">
       <button type="button" className="h-12 w-11 shrink-0 text-xl" aria-label={`Bajar ${label}`} onClick={() => change(-step)}>
         −
       </button>
