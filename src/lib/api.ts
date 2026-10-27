@@ -1,5 +1,6 @@
 import { openDB } from "idb";
 import { dayPackById, weekPackClientId, WEEK_PACKS } from "@/data/packs";
+import { EXTRA_EXERCISES } from "@/data/extra-exercises";
 import { buildRoutine, type RoutineExercise } from "@/data/routine";
 import { addIsoDays, santiagoDate, startOfIsoWeek } from "./format";
 import { isEasyWeek } from "./program";
@@ -359,7 +360,16 @@ function materializeWeekPack(db: Database, packId: string, activate: boolean) {
   return plan.id;
 }
 
+function ensureCatalog(db: Database) {
+  const known = new Set(db.exercises.map((item) => item.id));
+  const missing = EXTRA_EXERCISES.filter((item) => !known.has(item.id));
+  if (missing.length === 0) return;
+  db.exercises.push(...clone(missing));
+  write(db);
+}
+
 function ensureAthleticPlan(db: Database) {
+  ensureCatalog(db);
   const marker = weekPackClientId("atletico-8");
   const existing = db.plans.find((plan) => plan.client_id === marker);
   if (!existing) {
@@ -486,6 +496,31 @@ export async function savePlanExercise(plan: PlanTree, dayId: string, exercise: 
     }),
   });
   write(db);
+}
+
+export async function insertPlanExercise(plan: PlanTree, dayId: string, exercise: PlanExercise, index: number) {
+  const db = await load();
+  const current = db.plans.find((item) => item.id === plan.id) ?? plan;
+  const stamp = now();
+  putPlan(db, {
+    ...current,
+    updated_at: stamp,
+    days: current.days.map((day) => {
+      if (day.id !== dayId) return day;
+      const list = [...day.exercises].sort((a, b) => a.sort_order - b.sort_order);
+      list.splice(Math.max(0, Math.min(index, list.length)), 0, { ...exercise, updated_at: stamp });
+      return { ...day, exercises: list.map((item, order) => ({ ...item, sort_order: order })) };
+    }),
+  });
+  write(db);
+}
+
+export async function insertBlock(session: SessionTree, block: SessionExercise, at: number) {
+  const list = [...session.exercises];
+  list.splice(Math.max(0, Math.min(at, list.length)), 0, block);
+  const next = { ...session, exercises: list.map((item, order) => ({ ...item, sort_order: order })), updated_at: now() };
+  await saveSessionTree(next);
+  return next;
 }
 
 export async function removePlanExercise(plan: PlanTree, dayId: string, exercise: PlanExercise) {

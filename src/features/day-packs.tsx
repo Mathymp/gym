@@ -1,5 +1,5 @@
 import { DAY_PACKS, type DayPack } from "@/data/packs";
-import { machinePhotoSrc } from "@/components/machine-motion";
+import { ExerciseMotion } from "@/components/exercise-motion";
 
 export function DayPackList({
   action,
@@ -26,7 +26,7 @@ export function DayPackList({
                   className="flex min-h-16 w-full items-center gap-3 rounded-2xl bg-surface px-3 py-3 text-left shadow-[0_8px_20px_rgba(18,32,51,0.04)] disabled:opacity-40"
                   onClick={() => onPick(pack)}
                 >
-                  <img src={machinePhotoSrc(pack.exercises[0]?.slug ?? null, "piernas")} alt="" width={56} height={56} className="h-14 w-14 shrink-0 rounded-xl bg-white object-contain" />
+                  <ExerciseMotion slug={pack.exercises[0]?.slug ?? null} name={pack.label} muscle="piernas" labelled={false} className="h-16 w-24 shrink-0 rounded-xl" />
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold">{pack.label}</span>
                     <span className="mt-0.5 block text-sm leading-5 text-muted">{pack.summary}</span>

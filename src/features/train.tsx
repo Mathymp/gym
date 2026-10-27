@@ -10,6 +10,7 @@ import {
   applyDayPack,
   createBlankPlan,
   createExercise,
+  insertPlanExercise,
   installWeekPack,
   removePlanExercise,
   savePlanDay,
@@ -24,7 +25,9 @@ import { dayKindLabel } from "@/lib/metrics";
 import { newId } from "@/lib/utils";
 import { MUSCLE_LABEL, type DayKind, type Exercise, type MuscleGroup, type PlanDay, type PlanExercise, type TrackingType } from "@/lib/types";
 import { ExerciseChoice } from "@/components/exercise-choice";
-import { MachineMotion, machinePhotoSrc } from "@/components/machine-motion";
+import { ExerciseMotion } from "@/components/exercise-motion";
+import { MachineMotion } from "@/components/machine-motion";
+import { MuscleLine } from "@/components/muscle-line";
 import { programPhase } from "@/lib/program";
 import { useActivePlan, useExercises, useOpenSession, usePlans, useRefresh } from "@/features/use-data";
 
@@ -94,7 +97,7 @@ export function TrainScreen() {
             <li key={day.id}>
               <Link className="flex min-h-[4.5rem] items-center gap-3 rounded-[24px] bg-surface py-3 pr-3 pl-3 shadow-[0_8px_24px_rgba(18,32,51,0.05)]" to={`/entrenar/rutina/${plan.id}?dia=${day.id}`}>
                 {day.exercises[0] ? (
-                  <img src={machinePhotoSrc(day.exercises[0].exercise.slug, day.exercises[0].exercise.muscle_group)} alt="" width={56} height={56} className="h-14 w-14 shrink-0 rounded-xl bg-white object-contain" />
+                  <ExerciseMotion slug={day.exercises[0].exercise.slug} name={day.exercises[0].exercise.name} muscle={day.exercises[0].exercise.muscle_group} labelled={false} className="h-16 w-24 shrink-0 rounded-xl" />
                 ) : (
                   <span className="h-14 w-14 shrink-0 rounded-xl bg-raised" aria-hidden />
                 )}
@@ -169,7 +172,7 @@ export function PlanEditorScreen() {
   const params = new URLSearchParams(window.location.search);
   const initialDay = params.get("dia");
   const [dayId, setDayId] = useState(initialDay ?? plan?.days[0]?.id ?? "");
-  const [picker, setPicker] = useState(false);
+  const [picker, setPicker] = useState<number | null>(null);
   const [packsOpen, setPacksOpen] = useState(false);
   const [replacing, setReplacing] = useState<PlanExercise | null>(null);
   const [packPending, setPackPending] = useState(false);
@@ -225,7 +228,7 @@ export function PlanEditorScreen() {
     }
   }
 
-  async function addExercise(exercise: Exercise) {
+  async function addExercise(exercise: Exercise, at: number) {
     const id = newId();
     const row: PlanExercise = {
       id,
@@ -245,9 +248,10 @@ export function PlanEditorScreen() {
       exercise,
     };
     try {
-      await savePlanExercise(plan!, day!.id, row, "insert");
-      setPicker(false);
+      await insertPlanExercise(plan!, day!.id, row, at);
+      setPicker(null);
       await refresh();
+      toast.success(`${exercise.name} agregado`);
     } catch (caught) {
       toast.error(humanError(caught));
     }
@@ -313,6 +317,7 @@ export function PlanEditorScreen() {
           <PlanExerciseRow
             key={item.id}
             item={item}
+            onInsertBefore={index > 0 ? () => setPicker(index) : undefined}
             onChange={(next) => void savePlanExercise(plan, day.id, next, "update").then(() => refresh())}
             onReplace={() => setReplacing(item)}
             onDelete={() => void removePlanExercise(plan, day.id, item).then(() => refresh())}
@@ -327,7 +332,7 @@ export function PlanEditorScreen() {
         ))}
       </ul>
       {day.exercises.length === 0 ? <p className="text-sm text-muted">Este día no tiene ejercicios.</p> : null}
-      <Button size="lg" onClick={() => setPicker(true)}>Agregar ejercicio</Button>
+      <Button size="lg" onClick={() => setPicker(day.exercises.length)}>Agregar ejercicio al final</Button>
       <Sheet open={packsOpen} title="Pack para este día" onClose={() => setPacksOpen(false)}>
         <p className="mb-4 text-sm leading-6 text-muted">Reemplaza los ejercicios de {WEEKDAY_LABELS[day.weekday]}. El resto de la semana no cambia.</p>
         <DayPackList action="Poner" pending={packPending} onPick={(pack) => void useDayPack(pack.id, pack.label)} />
@@ -344,11 +349,11 @@ export function PlanEditorScreen() {
           />
         ) : null}
       </Sheet>
-      <Sheet open={picker} title="Agregar ejercicio" onClose={() => setPicker(false)}>
+      <Sheet open={picker != null} title={picker != null && picker < day.exercises.length ? "Agregar aquí" : "Agregar ejercicio"} onClose={() => setPicker(null)}>
         <ExerciseChoice
           exercises={exercises.data ?? []}
           zones={day.exercises.map((item) => item.exercise.muscle_group)}
-          onPick={(exercise) => void addExercise(exercise)}
+          onPick={(exercise) => void addExercise(exercise, picker ?? day.exercises.length)}
         />
       </Sheet>
     </Page>
@@ -361,30 +366,39 @@ function PlanExerciseRow({
   onDelete,
   onMove,
   onReplace,
+  onInsertBefore,
 }: {
   item: PlanExercise;
   onChange: (item: PlanExercise) => void;
   onDelete: () => void;
   onMove: (direction: number) => void;
   onReplace: () => void;
+  onInsertBefore?: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
   return (
-    <li className="border-b border-line py-4">
+    <li className="border-b border-line pb-4">
+      {onInsertBefore ? (
+        <div className="relative -mt-px flex h-10 items-center justify-center">
+          <span className="absolute inset-x-0 top-1/2 border-t border-dashed border-line" aria-hidden />
+          <button type="button" className="relative h-8 rounded-full bg-background px-3 text-xs font-semibold text-lime" onClick={onInsertBefore}>+ Agregar aquí</button>
+        </div>
+      ) : <div className="h-4" />}
       <div className="flex items-start gap-3">
-        <img src={machinePhotoSrc(item.exercise?.slug ?? null, item.exercise?.muscle_group ?? "piernas")} alt="" width={64} height={64} className="h-16 w-16 shrink-0 rounded-xl bg-white object-contain" />
+        <ExerciseMotion slug={item.exercise?.slug ?? null} name={item.exercise?.name ?? "Ejercicio"} muscle={item.exercise?.muscle_group ?? "piernas"} labelled={false} className="aspect-[3/2] w-32 shrink-0 rounded-xl" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="min-w-0 font-medium">{item.exercise?.name ?? "Ejercicio"}</p>
-            <div className="flex shrink-0">
-              <button className="h-11 w-11" aria-label="Subir" onClick={() => onMove(-1)}>↑</button>
-              <button className="h-11 w-11" aria-label="Bajar" onClick={() => onMove(1)}>↓</button>
+          <div className="flex items-start justify-between gap-1">
+            <p className="min-w-0 pt-0.5 font-semibold leading-5">{item.exercise?.name ?? "Ejercicio"}</p>
+            <div className="-mt-2 -mr-2 flex shrink-0">
+              <button className="h-11 w-9 text-muted" aria-label="Subir" onClick={() => onMove(-1)}>↑</button>
+              <button className="h-11 w-9 text-muted" aria-label="Bajar" onClick={() => onMove(1)}>↓</button>
             </div>
           </div>
-          {item.exercise?.instructions ? <p className="line-clamp-2 text-sm leading-5 text-muted">{item.exercise.instructions}</p> : null}
-          <button className="mt-1 h-11 text-sm font-semibold text-lime" onClick={onReplace}>Cambiar por otro de la misma zona</button>
+          {item.exercise ? <MuscleLine exercise={item.exercise} className="mt-1" /> : null}
         </div>
       </div>
+      {item.exercise?.instructions ? <p className="mt-2 line-clamp-2 text-sm leading-5 text-muted">{item.exercise.instructions}</p> : null}
+      <button className="h-11 text-sm font-semibold text-lime" onClick={onReplace}>Cambiar o reemplazar</button>
       <div className="mt-3 grid grid-cols-3 gap-2">
         <Mini label="Series" value={item.target_sets} onChange={(value) => onChange({ ...item, target_sets: value })} />
         <Mini label="Reps" value={item.target_reps_min ?? 0} onChange={(value) => onChange({ ...item, target_reps_min: value, target_reps_max: Math.max(value, item.target_reps_max ?? value) })} />
@@ -452,10 +466,11 @@ export function LibraryScreen() {
         {rest.map((exercise) => (
           <li key={exercise.id}>
             <button className="flex min-h-16 w-full items-center gap-3 rounded-2xl bg-surface py-2 pr-4 pl-2 text-left shadow-[0_8px_20px_rgba(18,32,51,0.04)]" onClick={() => setOpen(exercise)}>
-              <img src={machinePhotoSrc(exercise.slug, exercise.muscle_group)} alt="" width={72} height={72} className="h-16 w-16 shrink-0 rounded-xl bg-white object-contain" />
-              <span>
-                <span className="block font-medium">{exercise.name}</span>
-                <span className="text-sm text-muted">{MUSCLE_LABEL[exercise.muscle_group]} · {exercise.equipment}</span>
+              <ExerciseMotion slug={exercise.slug} name={exercise.name} muscle={exercise.muscle_group} labelled={false} className="aspect-[3/2] w-28 shrink-0 rounded-xl" />
+              <span className="min-w-0">
+                <span className="block font-semibold leading-5">{exercise.name}</span>
+                <MuscleLine exercise={exercise} className="mt-1" />
+                <span className="mt-0.5 block text-xs text-faint">{exercise.equipment}</span>
               </span>
             </button>
           </li>

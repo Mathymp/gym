@@ -3,15 +3,17 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button, InlineError, Sheet, Stepper } from "@/components/ui";
 import { ScreenSkeleton } from "@/components/shell";
-import { discardSession, finishSession, removeSet, saveBlock, saveSessionFields, saveSet } from "@/lib/api";
+import { discardSession, finishSession, insertBlock, removeSet, saveBlock, saveSessionFields, saveSet } from "@/lib/api";
 import { humanError } from "@/lib/errors";
 import { formatClock, formatKg, formatMediumDate, formatMinutes } from "@/lib/format";
 import { effectiveSets, recordsInSession, sessionDurationMs, volumeOf } from "@/lib/metrics";
 import { newId } from "@/lib/utils";
-import { MUSCLE_LABEL, type Exercise, type SessionExercise, type SessionTree, type TrackingType, type WorkoutSet } from "@/lib/types";
+import { type Exercise, type SessionExercise, type SessionTree, type TrackingType, type WorkoutSet } from "@/lib/types";
 import { ExerciseChoice } from "@/components/exercise-choice";
 import { FormaMark } from "@/components/forma-mark";
-import { MachineMotion, machinePhotoSrc } from "@/components/machine-motion";
+import { ExerciseMotion } from "@/components/exercise-motion";
+import { MachineMotion } from "@/components/machine-motion";
+import { MuscleLine } from "@/components/muscle-line";
 import { useEntries, useExercises, useHistory, usePlans, useProfile, useRefresh, useSession, useSetSession } from "@/features/use-data";
 
 export function SessionScreen() {
@@ -28,10 +30,14 @@ export function SessionScreen() {
   const session = query.data;
   const [now, setNow] = useState(() => Date.now());
   const [restUntil, setRestUntil] = useState<number | null>(null);
+  const [restTotal, setRestTotal] = useState(1);
   const completeCurrent = useRef<(() => void) | null>(null);
+  const restCard = useRef<HTMLDivElement | null>(null);
+  const [restCardVisible, setRestCardVisible] = useState(true);
   const [restSeconds, setRestSeconds] = useState(profile.data?.preferred_rest_seconds ?? 90);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [insertAt, setInsertAt] = useState<number | null>(null);
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const chimed = useRef(false);
@@ -55,6 +61,26 @@ export function SessionScreen() {
     chimed.current = true;
     setRestUntil(null);
   }, [now, restUntil, profile.data?.sound_enabled]);
+
+  const loaded = Boolean(query.data);
+  useEffect(() => {
+    const node = restCard.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(([entry]) => setRestCardVisible(entry.isIntersecting), { threshold: 0.35 });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loaded]);
+
+  const resting = restUntil != null && now < restUntil;
+  useEffect(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!meta) return;
+    const previous = meta.content;
+    meta.content = resting ? "#1e40af" : "#f3f6fb";
+    return () => {
+      meta.content = previous;
+    };
+  }, [resting]);
 
   if (query.isLoading) return <ScreenSkeleton />;
   if (query.error || !session) {
@@ -132,6 +158,7 @@ export function SessionScreen() {
     if (profile.data?.rest_timer_enabled === false) return;
     const start = Date.now();
     setNow(start);
+    setRestTotal(restSeconds * 1000);
     setRestUntil(start + restSeconds * 1000);
   }
 
@@ -140,13 +167,24 @@ export function SessionScreen() {
     if (restUntil == null) return;
     const start = Date.now();
     setNow(start);
+    setRestTotal(seconds * 1000);
     setRestUntil(start + seconds * 1000);
   }
 
+  const visibleBlocks = session.exercises.filter((block) => !block.replaced);
+  const restRatio = restLeft > 0 ? restLeft / restTotal : 0;
+
+  function openInsert(visibleIndex: number) {
+    const anchor = visibleBlocks[visibleIndex];
+    setInsertAt(anchor ? session!.exercises.indexOf(anchor) : session!.exercises.length);
+    setAdding(true);
+  }
+
   return (
-    <div className="mx-auto min-h-dvh w-full max-w-lg bg-background pb-8">
+    <div className={`min-h-dvh transition-colors duration-500 ease-out ${restLeft > 0 ? "bg-lime-deep" : "bg-background"}`}>
+    <div className="mx-auto w-full max-w-lg pb-[calc(2rem+env(safe-area-inset-bottom))]">
       <header className="px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="rounded-[28px] bg-lime px-4 py-4 text-ink shadow-[0_16px_40px_rgba(29,78,216,0.28)]">
+        <div className={`rounded-[28px] bg-lime px-4 py-4 text-ink transition-shadow duration-500 ${restLeft > 0 ? "shadow-none ring-1 ring-white/20" : "shadow-[0_16px_40px_rgba(29,78,216,0.28)]"}`}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="flex items-center gap-2 text-sm text-white/80">
@@ -161,23 +199,40 @@ export function SessionScreen() {
             </button>
           </div>
         </div>
-        <div className={`mt-3 rounded-[28px] p-4 shadow-[0_10px_30px_rgba(18,32,51,0.06)] ${restLeft > 0 ? "sticky top-[max(0.75rem,env(safe-area-inset-top))] z-20 bg-lime text-white" : "bg-surface"}`}>
+        <div ref={restCard} className="mt-3 scroll-mt-[calc(env(safe-area-inset-top)+0.75rem)] rounded-[28px] bg-surface p-4 shadow-[0_10px_30px_rgba(18,32,51,0.08)]">
           {restLeft > 0 ? (
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm text-white/80">Descanso</p>
-                <p className="mt-1 text-5xl font-semibold tabular">{formatClock(restLeft)}</p>
+            <div>
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold tracking-[0.14em] text-lime uppercase">Descanso</p>
+                  <p className="mt-1 text-6xl leading-none font-semibold tracking-tight tabular text-foreground">{formatClock(restLeft)}</p>
+                </div>
+                <p className="pb-1 text-right text-xs text-muted">Te aviso con<br />vibración</p>
               </div>
-              <p className="max-w-[10rem] text-right text-sm font-semibold">{upcoming ? `Después: ${upcoming.block.exercise.name}` : "Era la última serie"}</p>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-raised" aria-hidden>
+                <div className="h-full rounded-full bg-lime transition-[width] duration-300 ease-linear" style={{ width: `${restRatio * 100}%` }} />
+              </div>
+              {upcoming ? (
+                <div className="mt-4 flex items-center gap-3">
+                  <ExerciseMotion slug={upcoming.block.exercise.slug} name={upcoming.block.exercise.name} muscle={upcoming.block.exercise.muscle_group} labelled={false} className="aspect-[3/2] w-28 shrink-0 rounded-xl" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted">Después · serie {upcoming.set.set_index}</p>
+                    <p className="font-semibold leading-5">{upcoming.block.exercise.name}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm font-semibold">Era la última serie.</p>
+              )}
             </div>
           ) : upcoming ? (
-            <img src={machinePhotoSrc(upcoming.block.exercise.slug, upcoming.block.exercise.muscle_group)} alt={`Posición de ${upcoming.block.exercise.name}`} width={960} height={720} className="mb-3 h-40 w-full rounded-2xl bg-white object-contain" />
+            <ExerciseMotion steps slug={upcoming.block.exercise.slug} name={upcoming.block.exercise.name} muscle={upcoming.block.exercise.muscle_group} className="mb-3 aspect-[3/2] w-full rounded-2xl" />
           ) : null}
           {restLeft > 0 ? null : upcoming ? (
             <div>
-              <p className="text-sm text-muted">Ahora</p>
-              <p className="mt-1 text-lg font-semibold">{upcoming.block.exercise.name}</p>
-              <p className="mt-1 text-sm text-muted">Serie {upcoming.set.set_index}. Márcala cuando la termines y ahí parte el descanso.</p>
+              <p className="text-xs font-semibold tracking-[0.14em] text-lime uppercase">Ahora · serie {upcoming.set.set_index}</p>
+              <p className="mt-1 text-xl font-semibold leading-6">{upcoming.block.exercise.name}</p>
+              <MuscleLine exercise={upcoming.block.exercise} className="mt-2" />
+              <p className="mt-2 text-sm text-muted">Márcala cuando la termines y ahí parte el descanso.</p>
               {upcomingAdvice ? (
                 <>
                   <p className="mt-2 text-sm">{upcomingAdvice.line}</p>
@@ -195,37 +250,57 @@ export function SessionScreen() {
           )}
           <div className="mt-3 flex flex-wrap gap-2">
             {[60, 90, 120].map((seconds) => (
-              <button key={seconds} type="button" className={`h-10 min-w-12 rounded-full px-3 text-sm font-semibold ${restLeft > 0 ? (restSeconds === seconds ? "bg-white text-lime" : "bg-white/15 text-white") : (restSeconds === seconds ? "bg-lime text-white" : "bg-raised text-foreground")}`} onClick={() => chooseRest(seconds)}>
+              <button key={seconds} type="button" aria-pressed={restSeconds === seconds} className={`h-10 min-w-12 rounded-full px-3 text-sm font-semibold ${restSeconds === seconds ? "bg-lime text-white" : "bg-raised text-foreground"}`} onClick={() => chooseRest(seconds)}>
                 {seconds}s
               </button>
             ))}
-            {restLeft > 0 ? <button type="button" className="h-10 rounded-full bg-white px-3 text-sm font-semibold text-lime" onClick={() => setRestUntil(null)}>Saltar descanso</button> : null}
+            {restLeft > 0 ? <button type="button" className="ml-auto h-10 rounded-full px-3 text-sm font-semibold text-lime" onClick={() => setRestUntil(null)}>Saltar descanso</button> : null}
           </div>
           {restLeft === 0 && upcoming ? (
-            <button type="button" className="mt-3 h-12 w-full rounded-2xl bg-lime text-sm font-semibold text-white" onClick={() => completeCurrent.current?.()}>
+            <button type="button" className="mt-3 h-12 w-full rounded-2xl bg-lime text-sm font-semibold text-white active:scale-[0.99]" onClick={() => completeCurrent.current?.()}>
               Ya hice la serie
             </button>
           ) : null}
         </div>
       </header>
-      <div className="flex flex-col gap-4 px-4 pt-4">
-        {session.exercises.filter((block) => !block.replaced).map((block) => (
-          <ExerciseBlock
-            key={block.id}
-            block={block}
-            session={session}
-            previous={adviceFor(block.exercise_id)}
-            currentSetId={restLeft > 0 ? null : upcoming?.set.id ?? null}
-            onSession={commit}
-            onRest={armRest}
-            onRegister={registerCurrent}
-            onSubstitute={() => setPickerFor(block.id)}
-          />
+      <div className="flex flex-col px-4 pt-4">
+        {visibleBlocks.map((block, index) => (
+          <div key={block.id}>
+            {index > 0 ? <InsertHere resting={restLeft > 0} onClick={() => openInsert(index)} /> : null}
+            <ExerciseBlock
+              block={block}
+              session={session}
+              previous={adviceFor(block.exercise_id)}
+              currentSetId={restLeft > 0 ? null : upcoming?.set.id ?? null}
+              onSession={commit}
+              onRest={armRest}
+              onRegister={registerCurrent}
+              onSubstitute={() => setPickerFor(block.id)}
+            />
+          </div>
         ))}
-        <Button variant="surface" size="lg" onClick={() => setAdding(true)}>Agregar ejercicio</Button>
-        <Button size="lg" onClick={() => void togglePause()}>{session.status === "paused" ? "Reanudar" : "Pausar"}</Button>
-        <Button variant="danger" size="lg" onClick={() => setConfirmDiscard(true)}>Descartar esta sesión</Button>
+        <Button className="mt-4" variant="surface" size="lg" onClick={() => openInsert(visibleBlocks.length)}>Agregar otro ejercicio al final</Button>
+        <p className={`mt-2 text-center text-xs ${restLeft > 0 ? "text-white/70" : "text-muted"}`}>Puedes sumar más de lo que trae el plan. Queda solo en esta sesión.</p>
+        <Button className="mt-4" size="lg" onClick={() => void togglePause()}>{session.status === "paused" ? "Reanudar" : "Pausar"}</Button>
+        <Button className="mt-3" variant="danger" size="lg" onClick={() => setConfirmDiscard(true)}>Descartar esta sesión</Button>
       </div>
+    </div>
+      {restLeft > 0 && !restCardVisible ? (
+        <button
+          type="button"
+          className={`${restLeft <= 5000 ? "rest-bubble-ending" : "rest-bubble"} fixed z-50 flex h-[5.5rem] w-[5.5rem] flex-col items-center justify-center rounded-full bg-white text-lime`}
+          style={{ right: "max(1rem, calc(env(safe-area-inset-right) + 0.75rem))", bottom: "max(1rem, calc(env(safe-area-inset-bottom) + 0.75rem))" }}
+          aria-label={`Descanso, quedan ${formatClock(restLeft)}. Ir al reloj`}
+          onClick={() => restCard.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        >
+          <svg className="absolute inset-0 -rotate-90" viewBox="0 0 88 88" aria-hidden>
+            <circle cx="44" cy="44" r="39" fill="none" stroke="#e7eef8" strokeWidth="5" />
+            <circle cx="44" cy="44" r="39" fill="none" stroke="#1d4ed8" strokeWidth="5" strokeLinecap="round" strokeDasharray={`${2 * Math.PI * 39 * restRatio} ${2 * Math.PI * 39}`} className="transition-[stroke-dasharray] duration-300 ease-linear" />
+          </svg>
+          <span className="relative text-xl leading-none font-semibold tabular text-foreground">{formatClock(restLeft)}</span>
+          <span className="relative mt-1 text-[10px] font-semibold tracking-[0.12em] uppercase">Descanso</span>
+        </button>
+      ) : null}
       <Sheet open={confirmFinish} title="Terminar entrenamiento" onClose={() => setConfirmFinish(false)}>
         <p className="text-sm leading-6 text-muted">Se guarda el entreno y verás el resumen con las series que marcaste como hechas.</p>
         <Button className="mt-4 w-full" size="lg" onClick={() => void onFinish()}>Terminar y ver resumen</Button>
@@ -234,7 +309,7 @@ export function SessionScreen() {
         <p className="text-sm leading-6 text-muted">La sesión no entra en tus estadísticas ni en el historial de ejercicios.</p>
         <Button className="mt-4 w-full" variant="surface" size="lg" onClick={() => void onDiscard()}>Sacarla de las estadísticas</Button>
       </Sheet>
-      <Sheet open={Boolean(pickerFor) || adding} title={adding ? "Agregar ejercicio" : "Cambiar ejercicio"} onClose={() => { setPickerFor(null); setAdding(false); }}>
+      <Sheet open={Boolean(pickerFor) || adding} title={adding ? (insertAt != null && insertAt < session.exercises.length ? "Agregar aquí" : "Agregar ejercicio") : "Cambiar ejercicio"} onClose={() => { setPickerFor(null); setAdding(false); setInsertAt(null); }}>
         <ExerciseChoice
           exercises={catalog.data ?? []}
           zone={adding ? undefined : session.exercises.find((block) => block.id === pickerFor)?.exercise.muscle_group}
@@ -243,10 +318,16 @@ export function SessionScreen() {
           excludeId={adding ? undefined : session.exercises.find((block) => block.id === pickerFor)?.exercise_id}
           onPick={(exercise) => {
             void (async () => {
-              if (adding) await addExercise(session, exercise, commit);
-              else if (pickerFor) await substitute(session, pickerFor, exercise, commit);
+              try {
+                if (adding) await addExercise(session, exercise, commit, insertAt ?? session.exercises.length);
+                else if (pickerFor) await substitute(session, pickerFor, exercise, commit);
+                toast.success(adding ? `${exercise.name} agregado` : `Cambiado por ${exercise.name}`);
+              } catch (caught) {
+                toast.error(humanError(caught));
+              }
               setPickerFor(null);
               setAdding(false);
+              setInsertAt(null);
             })();
           }}
         />
@@ -285,9 +366,10 @@ function ExerciseBlock({
   return (
     <section className="rounded-[28px] bg-surface p-4 shadow-[0_10px_30px_rgba(18,32,51,0.06)]">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">{block.exercise.name}</h2>
-          <p className="text-sm text-muted">{MUSCLE_LABEL[block.exercise.muscle_group]} · {block.exercise.equipment}</p>
+        <div className="min-w-0">
+          <h2 className="text-xl leading-6 font-semibold">{block.exercise.name}</h2>
+          <MuscleLine exercise={block.exercise} className="mt-1.5" />
+          <p className="mt-1 text-xs text-faint">{block.exercise.equipment}</p>
         </div>
         <Button variant="surface" size="md" onClick={onSubstitute}>Cambiar</Button>
       </div>
@@ -476,7 +558,18 @@ function previousAdvice(
   return { line, suggestion };
 }
 
-async function addExercise(session: SessionTree, exercise: Exercise, onSession: (session: SessionTree) => Promise<void>) {
+function InsertHere({ resting, onClick }: { resting: boolean; onClick: () => void }) {
+  return (
+    <div className="relative flex h-12 items-center justify-center">
+      <span className={`absolute inset-x-6 top-1/2 border-t border-dashed ${resting ? "border-white/30" : "border-line"}`} aria-hidden />
+      <button type="button" className="relative h-9 rounded-full bg-surface px-4 text-xs font-semibold text-lime shadow-[0_4px_14px_rgba(18,32,51,0.08)]" onClick={onClick}>
+        + Agregar aquí
+      </button>
+    </div>
+  );
+}
+
+async function addExercise(session: SessionTree, exercise: Exercise, onSession: (session: SessionTree) => Promise<void>, at: number) {
   const id = newId();
   const setId = newId();
   const block: SessionExercise = {
@@ -512,8 +605,7 @@ async function addExercise(session: SessionTree, exercise: Exercise, onSession: 
       },
     ],
   };
-  let next = await saveBlock(session, block, "insert");
-  next = await saveSet(next, block.sets[0], "insert");
+  const next = await insertBlock(session, block, at);
   await onSession(next);
 }
 
@@ -529,7 +621,7 @@ async function substitute(session: SessionTree, blockId: string, exercise: Exerc
   }
   let current = await saveBlock(session, { ...block, replaced: true, sets: done }, "update");
   for (const set of block.sets.filter((item) => !item.completed_at)) current = await removeSet(current, set);
-  await addExercise(current, exercise, onSession);
+  await addExercise(current, exercise, onSession, current.exercises.findIndex((item) => item.id === block.id) + 1);
 }
 
 function Summary({

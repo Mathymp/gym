@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { machinePhotoSrc } from "@/components/machine-motion";
+import { ExerciseMotion } from "@/components/exercise-motion";
 import { Button, EmptyState, InlineError, Page, Sheet } from "@/components/ui";
 import { ScreenSkeleton } from "@/components/shell";
 import { DayPackList } from "@/features/day-packs";
@@ -147,13 +147,7 @@ export function HomeScreen() {
 
       <section>
         {cover ? (
-          <img
-            src={machinePhotoSrc(cover.slug, cover.muscle_group)}
-            alt={`Posición de ${cover.name}`}
-            width={960}
-            height={720}
-            className="h-52 w-full rounded-[28px] bg-white object-contain"
-          />
+          <ExerciseMotion slug={cover.slug} name={cover.name} muscle={cover.muscle_group} className="h-56 w-full rounded-[28px]" />
         ) : (
           <div className="h-24 rounded-[28px] bg-raised" />
         )}
@@ -190,7 +184,7 @@ export function HomeScreen() {
                   : `${item.target_reps_min ?? item.target_reps_max ?? ""}`;
               return (
                 <li key={item.id} className="flex items-center gap-3 border-b border-line py-3">
-                  <img src={machinePhotoSrc(item.exercise.slug, item.exercise.muscle_group)} alt="" width={64} height={64} className="h-16 w-16 shrink-0 rounded-xl bg-white object-contain" />
+                  <ExerciseMotion slug={item.exercise.slug} name={item.exercise.name} muscle={item.exercise.muscle_group} labelled={false} className="h-20 w-28 shrink-0 rounded-xl" />
                   <span className="min-w-0">
                     <span className="block font-medium">{item.exercise.name}</span>
                     <span className="text-sm text-muted">{sets} × {reps}</span>

@@ -43,6 +43,16 @@ export default defineConfig(() => {
         workbox: {
           navigateFallback: `${base}index.html`,
           globPatterns: ["**/*.{js,css,html,svg,png,woff2,webmanifest,json}"],
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }) => url.pathname.includes("/exercises/") && url.pathname.endsWith(".jpg"),
+              handler: "CacheFirst",
+              options: {
+                cacheName: "forma-exercises",
+                expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 180 },
+              },
+            },
+          ],
         },
       }),
       {

@@ -275,6 +275,20 @@ export const DAY_PACKS: DayPack[] = [
       move("elevaciones-piernas", 3, 12, 45),
     ],
   },
+  {
+    id: "abdomen-maquinas",
+    zone: "Abdomen",
+    label: "Abdomen en máquinas y polea",
+    summary: "Polea alta, máquina, silla romana, banco declinado, Pallof y plancha lateral.",
+    exercises: [
+      move("crunch-polea", 3, [12, 15], 60),
+      move("crunch-maquina", 3, [12, 15], 60),
+      move("elevaciones-rodillas", 3, 12, 45),
+      move("crunch-declinado", 2, 15, 45),
+      move("pallof", 2, 12, 45),
+      move("plancha-lateral", 2, null, 30, 30),
+    ],
+  },
 ];
 
 export const WEEK_PACKS: WeekPack[] = [
