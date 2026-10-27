@@ -9,8 +9,10 @@ import { formatClock, formatKg, formatMediumDate, formatMinutes } from "@/lib/fo
 import { effectiveSets, recordsInSession, sessionDurationMs, volumeOf } from "@/lib/metrics";
 import { newId } from "@/lib/utils";
 import { MUSCLE_LABEL, type Exercise, type SessionExercise, type SessionTree, type TrackingType, type WorkoutSet } from "@/lib/types";
-import { MachineMotion } from "@/components/machine-motion";
-import { useEntries, useExercises, useHistory, useProfile, useRefresh, useSession, useSetSession } from "@/features/use-data";
+import { ExerciseChoice } from "@/components/exercise-choice";
+import { FormaMark } from "@/components/forma-mark";
+import { MachineMotion, machinePhotoSrc } from "@/components/machine-motion";
+import { useEntries, useExercises, useHistory, usePlans, useProfile, useRefresh, useSession, useSetSession } from "@/features/use-data";
 
 export function SessionScreen() {
   const { sessionId = "" } = useParams();
@@ -18,6 +20,7 @@ export function SessionScreen() {
   const profile = useProfile();
   const catalog = useExercises();
   const entries = useEntries();
+  const plans = usePlans();
   const history = useHistory();
   const setCached = useSetSession();
   const refresh = useRefresh();
@@ -25,6 +28,7 @@ export function SessionScreen() {
   const session = query.data;
   const [now, setNow] = useState(() => Date.now());
   const [restUntil, setRestUntil] = useState<number | null>(null);
+  const completeCurrent = useRef<(() => void) | null>(null);
   const [restSeconds, setRestSeconds] = useState(profile.data?.preferred_rest_seconds ?? 90);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -33,9 +37,10 @@ export function SessionScreen() {
   const chimed = useRef(false);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    if (restUntil == null) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [restUntil]);
 
   useEffect(() => {
     if (restUntil == null) return;
@@ -43,8 +48,12 @@ export function SessionScreen() {
       chimed.current = false;
       return;
     }
-    if (!chimed.current && profile.data?.sound_enabled) chime();
+    if (!chimed.current) {
+      buzz();
+      if (profile.data?.sound_enabled) chime();
+    }
     chimed.current = true;
+    setRestUntil(null);
   }, [now, restUntil, profile.data?.sound_enabled]);
 
   if (query.isLoading) return <ScreenSkeleton />;
@@ -61,10 +70,17 @@ export function SessionScreen() {
     return <Summary session={session} entries={entries.data ?? []} history={history.data ?? []} />;
   }
 
-  const elapsed = sessionDurationMs(session, now);
   const restLeft = restUntil ? Math.max(0, restUntil - now) : 0;
   const doneSets = session.exercises.flatMap((block) => block.sets).filter((set) => set.completed_at).length;
   const allSets = session.exercises.reduce((sum, block) => sum + block.sets.length, 0);
+  const upcoming = nextOpenSet(session);
+  const plannedDay = plans.data?.find((item) => item.id === session.plan_id)?.days.find((item) => item.id === session.plan_day_id);
+  const adviceFor = (exerciseId: string) => {
+    const row = plannedDay?.exercises.find((item) => item.exercise_id === exerciseId);
+    return previousAdvice(entries.data ?? [], exerciseId, session.id, row ? { min: row.target_reps_min, max: row.target_reps_max } : null);
+  };
+  const upcomingAdvice = upcoming ? adviceFor(upcoming.block.exercise_id) : null;
+  const dayZones = [...new Set(session.exercises.filter((block) => !block.replaced).map((block) => block.exercise.muscle_group))];
 
   async function commit(next: SessionTree) {
     setCached(next);
@@ -108,9 +124,23 @@ export function SessionScreen() {
     }
   }
 
+  function registerCurrent(action: (() => void) | null) {
+    completeCurrent.current = action;
+  }
+
   function armRest() {
     if (profile.data?.rest_timer_enabled === false) return;
-    setRestUntil(Date.now() + restSeconds * 1000);
+    const start = Date.now();
+    setNow(start);
+    setRestUntil(start + restSeconds * 1000);
+  }
+
+  function chooseRest(seconds: number) {
+    setRestSeconds(seconds);
+    if (restUntil == null) return;
+    const start = Date.now();
+    setNow(start);
+    setRestUntil(start + seconds * 1000);
   }
 
   return (
@@ -119,7 +149,10 @@ export function SessionScreen() {
         <div className="rounded-[28px] bg-lime px-4 py-4 text-ink shadow-[0_16px_40px_rgba(29,78,216,0.28)]">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm text-white/80">Entrenamiento</p>
+              <p className="flex items-center gap-2 text-sm text-white/80">
+                <FormaMark className="h-5 w-5" />
+                FORMA
+              </p>
               <h1 className="mt-1 text-2xl font-semibold">{session.title}</h1>
               <p className="mt-1 text-sm text-white/80">{doneSets} de {allSets} series</p>
             </div>
@@ -128,22 +161,51 @@ export function SessionScreen() {
             </button>
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-[auto_1fr] items-center gap-3 rounded-[28px] bg-surface p-4 shadow-[0_10px_30px_rgba(18,32,51,0.06)]">
-          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-raised">
-            <p className="text-center text-2xl font-semibold tabular text-lime">{restLeft > 0 ? formatClock(restLeft) : formatClock(elapsed)}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted">{restLeft > 0 ? "Descanso" : session.status === "paused" ? "En pausa" : "Tiempo"}</p>
-            <p className="mt-1 text-lg font-semibold">{restLeft > 0 ? "Siguiente serie" : session.title}</p>
-            <div className="mt-3 flex gap-2">
-              {[60, 90, 120].map((seconds) => (
-                <button key={seconds} type="button" className={`h-10 min-w-12 rounded-full px-3 text-sm font-semibold ${restSeconds === seconds ? "bg-lime text-ink" : "bg-raised text-muted"}`} onClick={() => setRestSeconds(seconds)}>
-                  {seconds}s
-                </button>
-              ))}
-              {restLeft > 0 ? <button type="button" className="h-10 rounded-full bg-raised px-3 text-sm font-semibold text-foreground" onClick={() => setRestUntil(null)}>Saltar</button> : null}
+        <div className={`mt-3 rounded-[28px] p-4 shadow-[0_10px_30px_rgba(18,32,51,0.06)] ${restLeft > 0 ? "sticky top-[max(0.75rem,env(safe-area-inset-top))] z-20 bg-lime text-white" : "bg-surface"}`}>
+          {restLeft > 0 ? (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm text-white/80">Descanso</p>
+                <p className="mt-1 text-5xl font-semibold tabular">{formatClock(restLeft)}</p>
+              </div>
+              <p className="max-w-[10rem] text-right text-sm font-semibold">{upcoming ? `Después: ${upcoming.block.exercise.name}` : "Era la última serie"}</p>
             </div>
+          ) : upcoming ? (
+            <img src={machinePhotoSrc(upcoming.block.exercise.slug, upcoming.block.exercise.muscle_group)} alt={`Posición de ${upcoming.block.exercise.name}`} width={960} height={720} className="mb-3 h-40 w-full rounded-2xl bg-white object-contain" />
+          ) : null}
+          {restLeft > 0 ? null : upcoming ? (
+            <div>
+              <p className="text-sm text-muted">Ahora</p>
+              <p className="mt-1 text-lg font-semibold">{upcoming.block.exercise.name}</p>
+              <p className="mt-1 text-sm text-muted">Serie {upcoming.set.set_index}. Márcala cuando la termines y ahí parte el descanso.</p>
+              {upcomingAdvice ? (
+                <>
+                  <p className="mt-2 text-sm">{upcomingAdvice.line}</p>
+                  <p className="mt-1 text-sm font-semibold">{upcomingAdvice.suggestion}</p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-muted">Sin marca anterior de este ejercicio. Elige un peso que te deje unas 2 o 3 repeticiones de reserva.</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-muted">Listo</p>
+              <p className="mt-1 text-lg font-semibold">Marcaste todas las series</p>
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[60, 90, 120].map((seconds) => (
+              <button key={seconds} type="button" className={`h-10 min-w-12 rounded-full px-3 text-sm font-semibold ${restLeft > 0 ? (restSeconds === seconds ? "bg-white text-lime" : "bg-white/15 text-white") : (restSeconds === seconds ? "bg-lime text-white" : "bg-raised text-foreground")}`} onClick={() => chooseRest(seconds)}>
+                {seconds}s
+              </button>
+            ))}
+            {restLeft > 0 ? <button type="button" className="h-10 rounded-full bg-white px-3 text-sm font-semibold text-lime" onClick={() => setRestUntil(null)}>Saltar descanso</button> : null}
           </div>
+          {restLeft === 0 && upcoming ? (
+            <button type="button" className="mt-3 h-12 w-full rounded-2xl bg-lime text-sm font-semibold text-white" onClick={() => completeCurrent.current?.()}>
+              Ya hice la serie
+            </button>
+          ) : null}
         </div>
       </header>
       <div className="flex flex-col gap-4 px-4 pt-4">
@@ -152,9 +214,11 @@ export function SessionScreen() {
             key={block.id}
             block={block}
             session={session}
-            previous={previousLine(entries.data ?? [], block.exercise_id, session.id)}
+            previous={adviceFor(block.exercise_id)}
+            currentSetId={restLeft > 0 ? null : upcoming?.set.id ?? null}
             onSession={commit}
             onRest={armRest}
+            onRegister={registerCurrent}
             onSubstitute={() => setPickerFor(block.id)}
           />
         ))}
@@ -163,7 +227,7 @@ export function SessionScreen() {
         <Button variant="danger" size="lg" onClick={() => setConfirmDiscard(true)}>Descartar esta sesión</Button>
       </div>
       <Sheet open={confirmFinish} title="Terminar entrenamiento" onClose={() => setConfirmFinish(false)}>
-        <p className="text-sm leading-6 text-muted">Se cierra el cronómetro y verás el resumen con las series que marcaste como hechas.</p>
+        <p className="text-sm leading-6 text-muted">Se guarda el entreno y verás el resumen con las series que marcaste como hechas.</p>
         <Button className="mt-4 w-full" size="lg" onClick={() => void onFinish()}>Terminar y ver resumen</Button>
       </Sheet>
       <Sheet open={confirmDiscard} title="Descartar sesión" onClose={() => setConfirmDiscard(false)}>
@@ -171,8 +235,12 @@ export function SessionScreen() {
         <Button className="mt-4 w-full" variant="surface" size="lg" onClick={() => void onDiscard()}>Sacarla de las estadísticas</Button>
       </Sheet>
       <Sheet open={Boolean(pickerFor) || adding} title={adding ? "Agregar ejercicio" : "Cambiar ejercicio"} onClose={() => { setPickerFor(null); setAdding(false); }}>
-        <ExercisePicker
+        <ExerciseChoice
           exercises={catalog.data ?? []}
+          zone={adding ? undefined : session.exercises.find((block) => block.id === pickerFor)?.exercise.muscle_group}
+          zones={dayZones}
+          preferredSlugs={adding ? [] : session.exercises.find((block) => block.id === pickerFor)?.exercise.alternative_slugs ?? []}
+          excludeId={adding ? undefined : session.exercises.find((block) => block.id === pickerFor)?.exercise_id}
           onPick={(exercise) => {
             void (async () => {
               if (adding) await addExercise(session, exercise, commit);
@@ -187,19 +255,31 @@ export function SessionScreen() {
   );
 }
 
+function nextOpenSet(session: SessionTree) {
+  for (const block of session.exercises.filter((item) => !item.replaced)) {
+    const set = block.sets.find((item) => !item.completed_at);
+    if (set) return { block, set };
+  }
+  return null;
+}
+
 function ExerciseBlock({
   block,
   session,
   previous,
+  currentSetId,
   onSession,
   onRest,
+  onRegister,
   onSubstitute,
 }: {
   block: SessionExercise;
   session: SessionTree;
-  previous: string | null;
+  previous: { line: string; suggestion: string } | null;
+  currentSetId: string | null;
   onSession: (session: SessionTree) => Promise<void>;
   onRest: () => void;
+  onRegister: (action: (() => void) | null) => void;
   onSubstitute: () => void;
 }) {
   return (
@@ -214,10 +294,17 @@ function ExerciseBlock({
       <MachineMotion compact slug={block.exercise.slug} name={block.exercise.name} muscle={block.exercise.muscle_group} />
       <p className="mt-2 text-sm leading-5"><span className="font-semibold text-lime">Consejo. </span>{block.exercise.instructions}</p>
       {block.exercise.common_mistakes ? <p className="mt-1 text-sm leading-5 text-muted"><span className="font-semibold">Evita. </span>{block.exercise.common_mistakes}</p> : null}
-      {previous ? <p className="mt-2 text-sm text-faint">Última sesión: {previous}</p> : <p className="mt-2 text-sm text-faint">Sin cargas anteriores.</p>}
+      {previous ? (
+        <div className="mt-2">
+          <p className="text-sm">{previous.line}</p>
+          <p className="mt-1 text-sm font-semibold">{previous.suggestion}</p>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-faint">Sin marca anterior de este ejercicio, en ningún día.</p>
+      )}
       <div className="mt-3 flex flex-col gap-2">
         {block.sets.map((set) => (
-          <SetRow key={set.id} set={set} tracking={block.exercise.tracking_type} session={session} onSession={onSession} onRest={onRest} />
+          <SetRow key={set.id} set={set} tracking={block.exercise.tracking_type} session={session} current={set.id === currentSetId} onSession={onSession} onRest={onRest} onRegister={onRegister} />
         ))}
       </div>
       <Button className="mt-3 w-full" variant="surface" onClick={() => {
@@ -265,14 +352,18 @@ function SetRow({
   set,
   tracking,
   session,
+  current,
   onSession,
   onRest,
+  onRegister,
 }: {
   set: WorkoutSet;
   tracking: TrackingType;
   session: SessionTree;
+  current: boolean;
   onSession: (session: SessionTree) => Promise<void>;
   onRest: () => void;
+  onRegister: (action: (() => void) | null) => void;
 }) {
   const [weight, setWeight] = useState(set.weight_kg);
   const [reps, setReps] = useState(set.reps);
@@ -301,6 +392,12 @@ function SetRow({
     if (completed && !done) onRest();
   }
 
+  if (current && !done) {
+    onRegister(() => {
+      void persist({}, true).catch((caught) => toast.error(humanError(caught)));
+    });
+  }
+
   return (
     <div className={`rounded-2xl px-2 py-2 ${done ? "bg-raised" : ""}`}>
       <div className="mb-1 flex items-center justify-between text-xs text-faint">
@@ -319,14 +416,17 @@ function SetRow({
         {tracking === "weight_reps" || tracking === "reps" ? <Stepper label="Repeticiones" unit="reps" step={1} max={200} value={reps} onChange={setReps} /> : null}
         {tracking === "time" ? <Stepper label="Segundos" unit="s" step={5} max={3600} value={seconds} onChange={setSeconds} /> : null}
         {tracking === "distance" ? <Stepper label="Distancia" unit="m" step={100} max={100000} value={distance} onChange={setDistance} /> : null}
+        {done ? <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-lime text-lg font-semibold text-white" aria-label="Serie hecha">✓</span> : null}
+      </div>
+      {!done && current ? (
         <button
-          className={`h-14 w-14 shrink-0 rounded-2xl text-lg font-semibold ${done ? "bg-lime text-ink" : "bg-raised text-foreground"}`}
-          aria-label={done ? "Guardar corrección" : "Completar serie"}
+          type="button"
+          className="mt-2 h-12 w-full rounded-2xl bg-lime text-sm font-semibold text-white"
           onClick={() => void persist({}, true).catch((caught) => toast.error(humanError(caught)))}
         >
-          {done ? "✓" : "○"}
+          Ya hice la serie
         </button>
-      </div>
+      ) : null}
       <div className="mt-1 flex items-center justify-between">
         <button className="h-10 text-xs text-muted" onClick={() => setRpe(rpe == null ? 7 : rpe >= 10 ? null : Math.round((rpe + 0.5) * 10) / 10)}>
           {rpe == null ? "RPE opcional" : `RPE ${rpe}`}
@@ -348,13 +448,32 @@ function validSet(tracking: TrackingType, set: WorkoutSet) {
   return (set.distance_m ?? 0) > 0 || (set.duration_seconds ?? 0) > 0;
 }
 
-function previousLine(entries: Array<{ exercise_id: string; session_id: string; weight_kg: number | null; reps: number | null; duration_seconds: number | null; is_warmup: boolean }>, exerciseId: string, sessionId: string) {
-  const match = entries.find((entry) => entry.exercise_id === exerciseId && entry.session_id !== sessionId && !entry.is_warmup);
-  if (!match) return null;
-  if (match.weight_kg != null && match.reps != null) return `${formatKg(match.weight_kg)} × ${match.reps}`;
-  if (match.duration_seconds) return `${match.duration_seconds} s`;
-  if (match.reps) return `${match.reps} reps`;
-  return null;
+function previousAdvice(
+  entries: Array<{ exercise_id: string; session_id: string; started_at: string; weight_kg: number | null; reps: number | null; duration_seconds: number | null; is_warmup: boolean }>,
+  exerciseId: string,
+  sessionId: string,
+  target: { min: number | null; max: number | null } | null,
+) {
+  const rows = entries.filter((entry) => entry.exercise_id === exerciseId && entry.session_id !== sessionId && !entry.is_warmup);
+  if (rows.length === 0) return null;
+  const latest = rows[0].session_id;
+  const sets = rows.filter((entry) => entry.session_id === latest);
+  const dated = formatMediumDate(rows[0].started_at);
+  const reps = sets.map((entry) => entry.reps).filter((value): value is number => value != null);
+  const weight = sets.find((entry) => entry.weight_kg != null)?.weight_kg ?? null;
+  const seconds = sets.find((entry) => entry.duration_seconds)?.duration_seconds ?? null;
+  const line = weight != null && reps.length
+    ? `Antes, ${dated}: ${formatKg(weight)} × ${reps.join(", ")}`
+    : reps.length
+      ? `Antes, ${dated}: ${reps.join(", ")} reps`
+      : seconds
+        ? `Antes, ${dated}: ${seconds} s`
+        : null;
+  if (!line) return null;
+  let suggestion = "Parte con ese peso. Si completas el rango en todas las series, la próxima sube un poco.";
+  if (target?.max != null && reps.length > 0 && reps.every((value) => value >= target.max!)) suggestion = "La vez anterior llegaste al tope. Sube un poco el peso.";
+  else if (target?.min != null && reps.some((value) => value < target.min!)) suggestion = "La vez anterior te quedaste bajo el rango. Mantén el peso.";
+  return { line, suggestion };
 }
 
 async function addExercise(session: SessionTree, exercise: Exercise, onSession: (session: SessionTree) => Promise<void>) {
@@ -411,26 +530,6 @@ async function substitute(session: SessionTree, blockId: string, exercise: Exerc
   let current = await saveBlock(session, { ...block, replaced: true, sets: done }, "update");
   for (const set of block.sets.filter((item) => !item.completed_at)) current = await removeSet(current, set);
   await addExercise(current, exercise, onSession);
-}
-
-function ExercisePicker({ exercises, onPick }: { exercises: Exercise[]; onPick: (exercise: Exercise) => void }) {
-  const [query, setQuery] = useState("");
-  const filtered = exercises.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())).slice(0, 25);
-  return (
-    <div>
-      <input className="h-12 w-full rounded-2xl bg-background px-3" placeholder="Buscar" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Buscar ejercicio" />
-      <ul className="mt-3">
-        {filtered.map((exercise) => (
-          <li key={exercise.id}>
-            <button className="flex min-h-14 w-full items-center justify-between border-b border-line text-left" onClick={() => onPick(exercise)}>
-              <span>{exercise.name}</span>
-              <span className="text-xs text-faint">{MUSCLE_LABEL[exercise.muscle_group]}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 }
 
 function Summary({
@@ -495,6 +594,10 @@ function Summary({
       <Button asChild size="lg"><Link to="/">Volver al inicio</Link></Button>
     </div>
   );
+}
+
+function buzz() {
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate([160, 80, 160, 80, 280]);
 }
 
 function chime() {

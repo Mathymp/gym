@@ -3,22 +3,29 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button, EmptyState, InlineError, Kicker, Page, Sheet, TextField } from "@/components/ui";
 import { ScreenSkeleton } from "@/components/shell";
+import { WEEK_PACKS, weekPackClientId } from "@/data/packs";
+import { DayPackList } from "@/features/day-packs";
 import {
   activatePlan,
+  applyDayPack,
   createBlankPlan,
   createExercise,
+  installWeekPack,
   removePlanExercise,
   savePlanDay,
   savePlanExercise,
   savePlanMeta,
   swapPlanDays,
+  todayIso,
 } from "@/lib/api";
 import { humanError } from "@/lib/errors";
 import { WEEKDAY_LABELS } from "@/lib/format";
 import { dayKindLabel } from "@/lib/metrics";
 import { newId } from "@/lib/utils";
 import { MUSCLE_LABEL, type DayKind, type Exercise, type MuscleGroup, type PlanDay, type PlanExercise, type TrackingType } from "@/lib/types";
+import { ExerciseChoice } from "@/components/exercise-choice";
 import { MachineMotion, machinePhotoSrc } from "@/components/machine-motion";
+import { programPhase } from "@/lib/program";
 import { useActivePlan, useExercises, useOpenSession, usePlans, useRefresh } from "@/features/use-data";
 
 export function TrainScreen() {
@@ -28,9 +35,33 @@ export function TrainScreen() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
+  const [packPending, setPackPending] = useState<string | null>(null);
+  const [confirmPack, setConfirmPack] = useState<(typeof WEEK_PACKS)[number] | null>(null);
 
   if (plans.isLoading || profile.isLoading) return <ScreenSkeleton />;
   if (plans.error) return <Page><InlineError message={humanError(plans.error)} onRetry={() => void plans.refetch()} /></Page>;
+
+  function askPack(pack: (typeof WEEK_PACKS)[number]) {
+    if (pack.days.length < 5) {
+      setConfirmPack(pack);
+      return;
+    }
+    void usePack(pack.id, pack.name);
+  }
+
+  async function usePack(packId: string, packName: string) {
+    setConfirmPack(null);
+    setPackPending(packId);
+    try {
+      await installWeekPack(packId);
+      await refresh();
+      toast.success(`Ahora usas ${packName}. La rutina anterior sigue guardada.`);
+    } catch (caught) {
+      toast.error(humanError(caught));
+    } finally {
+      setPackPending(null);
+    }
+  }
 
   async function createPlan() {
     if (!name.trim()) return;
@@ -52,6 +83,7 @@ export function TrainScreen() {
       <header>
         <Kicker>Entrenar</Kicker>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight">{plan?.name ?? "Sin rutina"}</h1>
+        {plan?.program_started_on ? <p className="mt-2 text-sm leading-5 text-muted">{programPhase(plan.program_started_on, plan.easy_through, todayIso())?.hint}</p> : null}
       </header>
       {open.data ? (
         <Button className="w-full" size="lg" onClick={() => navigate(`/sesion/${open.data!.id}`)}>Continuar sesión abierta</Button>
@@ -60,12 +92,17 @@ export function TrainScreen() {
         <ul className="flex flex-col gap-2">
           {plan.days.map((day) => (
             <li key={day.id}>
-              <Link className="flex min-h-[4.5rem] items-center justify-between gap-3 rounded-[24px] bg-surface px-4 shadow-[0_8px_24px_rgba(18,32,51,0.05)]" to={`/entrenar/rutina/${plan.id}?dia=${day.id}`}>
-                <span>
+              <Link className="flex min-h-[4.5rem] items-center gap-3 rounded-[24px] bg-surface py-3 pr-3 pl-3 shadow-[0_8px_24px_rgba(18,32,51,0.05)]" to={`/entrenar/rutina/${plan.id}?dia=${day.id}`}>
+                {day.exercises[0] ? (
+                  <img src={machinePhotoSrc(day.exercises[0].exercise.slug, day.exercises[0].exercise.muscle_group)} alt="" width={56} height={56} className="h-14 w-14 shrink-0 rounded-xl bg-white object-contain" />
+                ) : (
+                  <span className="h-14 w-14 shrink-0 rounded-xl bg-raised" aria-hidden />
+                )}
+                <span className="min-w-0 flex-1">
                   <span className="block font-semibold">{day.label}</span>
                   <span className="text-sm text-muted">{WEEKDAY_LABELS[day.weekday]} · {dayKindLabel(day.day_kind)} · {day.exercises.length} ejercicios</span>
                 </span>
-                <span className="rounded-full bg-raised px-3 py-2 text-sm font-semibold text-lime">Editar</span>
+                <span className="shrink-0 rounded-full bg-lime px-3 py-2 text-sm font-semibold text-white">Editar</span>
               </Link>
             </li>
           ))}
@@ -73,6 +110,29 @@ export function TrainScreen() {
       ) : (
         <EmptyState title="Todavía no hay rutina" body="Crea una rutina y elige los ejercicios de cada día." />
       )}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Packs de la semana</h2>
+        <p className="text-sm leading-6 text-muted">La sugerida es Atlético 8 semanas, 5 días. Si eliges una más corta, entrenas menos veces. La rutina anterior queda guardada.</p>
+        <ul>
+          {WEEK_PACKS.map((pack) => {
+            const active = plan?.client_id === weekPackClientId(pack.id);
+            return (
+              <li key={pack.id} className="flex items-start justify-between gap-3 border-b border-line py-3">
+                <span>
+                  <span className="block font-semibold">{pack.name}</span>
+                  <span className="mt-0.5 block text-sm text-lime">{pack.focus}</span>
+                  <span className="mt-1 block text-sm leading-5 text-muted">{pack.summary}</span>
+                </span>
+                {active ? <span className="shrink-0 pt-1 text-sm font-semibold text-lime">En uso</span> : (
+                  <button type="button" aria-label={`Usar ${pack.name}`} className="h-11 shrink-0 rounded-full bg-lime px-4 text-sm font-semibold text-white disabled:opacity-40" disabled={packPending !== null} onClick={() => askPack(pack)}>
+                    {packPending === pack.id ? "Aplicando" : "Usar"}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
       <Button size="lg" className="w-full" onClick={() => navigate("/entrenar/ejercicios")}>Biblioteca de ejercicios</Button>
       <section className="flex flex-col gap-3 border-t border-line pt-5">
         <h2 className="text-lg font-semibold">Otra rutina</h2>
@@ -83,12 +143,19 @@ export function TrainScreen() {
             <li key={item.id} className="flex items-center justify-between border-b border-line py-3">
               <span>{item.name}</span>
               {item.id === plan?.id ? <span className="text-xs text-lime">Activa</span> : (
-                <button className="h-11 text-sm text-lime" onClick={() => void activatePlan(item.id).then(() => refresh())}>Activar</button>
+                <button className="h-11 shrink-0 rounded-full bg-lime px-4 text-sm font-semibold text-white" onClick={() => void activatePlan(item.id).then(() => refresh())}>Activar</button>
               )}
             </li>
           ))}
         </ul>
       </section>
+      <Sheet open={Boolean(confirmPack)} title="Este plan tiene menos de 5 días" onClose={() => setConfirmPack(null)}>
+        <p className="text-sm leading-6 text-muted">
+          {confirmPack ? `${confirmPack.name} tiene ${confirmPack.days.length} días de pesas. El atlético está pensado para 5. Si lo usas, entrenas menos veces por semana. La rutina de 5 días queda guardada.` : ""}
+        </p>
+        <Button className="mt-4 w-full" size="lg" onClick={() => confirmPack && void usePack(confirmPack.id, confirmPack.name)}>Usarlo igual</Button>
+        <Button className="mt-2 w-full" size="lg" variant="surface" onClick={() => setConfirmPack(null)}>Seguir con 5 días</Button>
+      </Sheet>
     </Page>
   );
 }
@@ -103,15 +170,55 @@ export function PlanEditorScreen() {
   const initialDay = params.get("dia");
   const [dayId, setDayId] = useState(initialDay ?? plan?.days[0]?.id ?? "");
   const [picker, setPicker] = useState(false);
-  const [query, setQuery] = useState("");
+  const [packsOpen, setPacksOpen] = useState(false);
+  const [replacing, setReplacing] = useState<PlanExercise | null>(null);
+  const [packPending, setPackPending] = useState(false);
   const day = plan?.days.find((item) => item.id === dayId) ?? plan?.days[0] ?? null;
 
   if (plans.isLoading || exercises.isLoading) return <ScreenSkeleton />;
   if (!plan || !day) return <Page><EmptyState title="No está esa rutina" body="Vuelve a entrenar y elige una rutina existente." /></Page>;
 
   async function updateDay(next: PlanDay) {
+    const strength = plan!.days.filter((item) => (item.id === next.id ? next.day_kind : item.day_kind) === "strength").length;
     try {
       await savePlanDay(plan!, next);
+      await refresh();
+      if (day!.day_kind === "strength" && next.day_kind !== "strength" && strength < 5) {
+        toast.message("Este plan queda con menos de 5 días de pesas. El atlético está pensado para 5.");
+      }
+    } catch (caught) {
+      toast.error(humanError(caught));
+    }
+  }
+
+  async function useDayPack(packId: string, label: string) {
+    setPackPending(true);
+    try {
+      await applyDayPack(plan!, day!.id, packId);
+      setPacksOpen(false);
+      await refresh();
+      toast.success(`${WEEKDAY_LABELS[day!.weekday]} queda en ${label}.`);
+    } catch (caught) {
+      toast.error(humanError(caught));
+    } finally {
+      setPackPending(false);
+    }
+  }
+
+  async function replaceExercise(exercise: Exercise) {
+    if (!replacing) return;
+    const time = exercise.tracking_type === "time";
+    const next: PlanExercise = {
+      ...replacing,
+      exercise_id: exercise.id,
+      exercise,
+      target_reps_min: time ? null : replacing.target_reps_min ?? 10,
+      target_reps_max: time ? null : replacing.target_reps_max ?? 12,
+      target_seconds: time ? replacing.target_seconds ?? 30 : null,
+    };
+    try {
+      await savePlanExercise(plan!, day!.id, next, "update");
+      setReplacing(null);
       await refresh();
     } catch (caught) {
       toast.error(humanError(caught));
@@ -146,8 +253,6 @@ export function PlanEditorScreen() {
     }
   }
 
-  const filtered = (exercises.data ?? []).filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
-
   return (
     <Page>
       <Link className="text-sm text-muted" to="/entrenar">Volver</Link>
@@ -160,7 +265,7 @@ export function PlanEditorScreen() {
           if (event.target.value.trim() && event.target.value !== plan.name) void savePlanMeta(plan, { name: event.target.value.trim() }).then(() => refresh());
         }}
       />
-      <div className="flex gap-2 overflow-auto">
+      <div className="no-scrollbar flex gap-2 overflow-auto">
         {plan.days.map((item) => (
           <button key={item.id} className={`h-11 shrink-0 px-3 text-sm ${item.id === day.id ? "text-lime" : "text-muted"}`} onClick={() => setDayId(item.id)}>
             {WEEKDAY_LABELS[item.weekday].slice(0, 3)}
@@ -188,7 +293,7 @@ export function PlanEditorScreen() {
         </select>
       </label>
       <label className="block text-sm text-muted">
-        Pasar este día al lugar de otro
+        Pasar este día al lugar de otro, todas las semanas
         <select
           className="mt-2 h-12 w-full rounded-2xl border border-line bg-surface px-3"
           value={day.id}
@@ -202,12 +307,14 @@ export function PlanEditorScreen() {
           ))}
         </select>
       </label>
+      <Button size="lg" variant="surface" onClick={() => setPacksOpen(true)}>Pack para este día</Button>
       <ul className="border-t border-line">
         {day.exercises.map((item, index) => (
           <PlanExerciseRow
             key={item.id}
             item={item}
             onChange={(next) => void savePlanExercise(plan, day.id, next, "update").then(() => refresh())}
+            onReplace={() => setReplacing(item)}
             onDelete={() => void removePlanExercise(plan, day.id, item).then(() => refresh())}
             onMove={(direction) => {
               const swap = day.exercises[index + direction];
@@ -221,18 +328,28 @@ export function PlanEditorScreen() {
       </ul>
       {day.exercises.length === 0 ? <p className="text-sm text-muted">Este día no tiene ejercicios.</p> : null}
       <Button size="lg" onClick={() => setPicker(true)}>Agregar ejercicio</Button>
+      <Sheet open={packsOpen} title="Pack para este día" onClose={() => setPacksOpen(false)}>
+        <p className="mb-4 text-sm leading-6 text-muted">Reemplaza los ejercicios de {WEEKDAY_LABELS[day.weekday]}. El resto de la semana no cambia.</p>
+        <DayPackList action="Poner" pending={packPending} onPick={(pack) => void useDayPack(pack.id, pack.label)} />
+      </Sheet>
+      <Sheet open={Boolean(replacing)} title="Cambiar ejercicio" onClose={() => setReplacing(null)}>
+        {replacing ? (
+          <ExerciseChoice
+            exercises={exercises.data ?? []}
+            zone={replacing.exercise.muscle_group}
+            zones={day.exercises.map((item) => item.exercise.muscle_group)}
+            preferredSlugs={replacing.exercise.alternative_slugs}
+            excludeId={replacing.exercise_id}
+            onPick={(exercise) => void replaceExercise(exercise)}
+          />
+        ) : null}
+      </Sheet>
       <Sheet open={picker} title="Agregar ejercicio" onClose={() => setPicker(false)}>
-        <TextField label="Buscar" value={query} onChange={(event) => setQuery(event.target.value)} />
-        <ul className="mt-4">
-          {filtered.slice(0, 30).map((exercise) => (
-            <li key={exercise.id}>
-              <button className="flex min-h-14 w-full items-center justify-between border-b border-line text-left" onClick={() => void addExercise(exercise)}>
-                <span>{exercise.name}</span>
-                <span className="text-xs text-faint">{MUSCLE_LABEL[exercise.muscle_group]}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <ExerciseChoice
+          exercises={exercises.data ?? []}
+          zones={day.exercises.map((item) => item.exercise.muscle_group)}
+          onPick={(exercise) => void addExercise(exercise)}
+        />
       </Sheet>
     </Page>
   );
@@ -243,20 +360,29 @@ function PlanExerciseRow({
   onChange,
   onDelete,
   onMove,
+  onReplace,
 }: {
   item: PlanExercise;
   onChange: (item: PlanExercise) => void;
   onDelete: () => void;
   onMove: (direction: number) => void;
+  onReplace: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <li className="border-b border-line py-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-medium">{item.exercise?.name ?? "Ejercicio"}</p>
-        <div className="flex">
-          <button className="h-11 w-11" aria-label="Subir" onClick={() => onMove(-1)}>↑</button>
-          <button className="h-11 w-11" aria-label="Bajar" onClick={() => onMove(1)}>↓</button>
+      <div className="flex items-start gap-3">
+        <img src={machinePhotoSrc(item.exercise?.slug ?? null, item.exercise?.muscle_group ?? "piernas")} alt="" width={64} height={64} className="h-16 w-16 shrink-0 rounded-xl bg-white object-contain" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="min-w-0 font-medium">{item.exercise?.name ?? "Ejercicio"}</p>
+            <div className="flex shrink-0">
+              <button className="h-11 w-11" aria-label="Subir" onClick={() => onMove(-1)}>↑</button>
+              <button className="h-11 w-11" aria-label="Bajar" onClick={() => onMove(1)}>↓</button>
+            </div>
+          </div>
+          {item.exercise?.instructions ? <p className="line-clamp-2 text-sm leading-5 text-muted">{item.exercise.instructions}</p> : null}
+          <button className="mt-1 h-11 text-sm font-semibold text-lime" onClick={onReplace}>Cambiar por otro de la misma zona</button>
         </div>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
@@ -348,7 +474,7 @@ export function LibraryScreen() {
 
 function FilterChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
-    <button type="button" className={`h-10 shrink-0 rounded-full px-4 text-sm font-semibold ${selected ? "bg-lime text-ink" : "bg-surface text-muted"}`} onClick={onClick}>
+    <button type="button" className={`h-10 shrink-0 rounded-full px-4 text-sm font-semibold ${selected ? "bg-lime text-white" : "bg-surface text-foreground"}`} onClick={onClick}>
       {label}
     </button>
   );

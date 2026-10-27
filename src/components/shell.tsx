@@ -1,5 +1,6 @@
 import { CalendarDays, Dumbbell, House, TrendingUp, UserRound } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
+import { FormaLockup } from "@/components/forma-mark";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -13,11 +14,16 @@ const items = [
 export function AppShell() {
   return (
     <div className="min-h-dvh">
+      <header className="sticky top-0 z-30 border-b border-line bg-background/95 backdrop-blur">
+        <div className="mx-auto flex max-w-lg items-center px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 md:max-w-3xl">
+          <FormaLockup />
+        </div>
+      </header>
       <main className="pb-28">
         <Outlet />
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex max-w-lg items-stretch justify-between px-2 pt-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] md:max-w-3xl">
+      <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.65rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex max-w-lg items-stretch justify-between rounded-full border border-line bg-surface px-1 py-1 shadow-[0_10px_30px_rgba(18,32,51,0.08)] md:max-w-3xl">
           {items.map((item) => (
             <NavLink
               key={item.to}
@@ -25,19 +31,13 @@ export function AppShell() {
               end={item.end}
               className={({ isActive }) =>
                 cn(
-                  "flex min-h-14 min-w-14 flex-1 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-medium",
-                  isActive ? "text-lime" : "text-faint",
+                  "flex min-h-12 min-w-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-full text-[11px] font-medium",
+                  isActive ? "bg-lime text-white" : "text-faint",
                 )
               }
             >
-              {({ isActive }) => (
-                <>
-                  <span className={cn("flex h-8 w-12 items-center justify-center rounded-full", isActive ? "bg-raised text-lime" : "text-faint")}>
-                    <item.icon size={20} strokeWidth={2} aria-hidden />
-                  </span>
-                  {item.label}
-                </>
-              )}
+              <item.icon size={18} strokeWidth={2} aria-hidden />
+              {item.label}
             </NavLink>
           ))}
         </div>

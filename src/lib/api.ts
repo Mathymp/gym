@@ -1,6 +1,8 @@
 import { openDB } from "idb";
-import { buildRoutine } from "@/data/routine";
-import { santiagoDate } from "./format";
+import { dayPackById, weekPackClientId, WEEK_PACKS } from "@/data/packs";
+import { buildRoutine, type RoutineExercise } from "@/data/routine";
+import { addIsoDays, santiagoDate, startOfIsoWeek } from "./format";
+import { isEasyWeek } from "./program";
 import { newId } from "./utils";
 import type {
   BodyMeasurement,
@@ -74,17 +76,20 @@ function write(db: Database) {
 }
 
 async function load() {
-  if (memory) return memory;
+  if (memory) {
+    ensureAthleticPlan(memory);
+    return memory;
+  }
   loading ??= (async () => {
     const saved = localStorage.getItem(FILE_KEY);
-    if (saved) {
-      memory = JSON.parse(saved) as Database;
-      return memory;
+    if (saved) memory = JSON.parse(saved) as Database;
+    else {
+      const response = await fetch(`${import.meta.env.BASE_URL}data/forma.json`);
+      if (!response.ok) throw new Error("No encontramos el archivo data/forma.json.");
+      memory = (await response.json()) as Database;
+      localStorage.setItem(FILE_KEY, JSON.stringify(memory));
     }
-    const response = await fetch(`${import.meta.env.BASE_URL}data/forma.json`);
-    if (!response.ok) throw new Error("No encontramos el archivo data/forma.json.");
-    memory = (await response.json()) as Database;
-    localStorage.setItem(FILE_KEY, JSON.stringify(memory));
+    ensureAthleticPlan(memory);
     return memory;
   })();
   return loading;
@@ -274,6 +279,148 @@ export async function createBlankPlan(name: string) {
   return clone(plan);
 }
 
+function planExercises(db: Database, dayId: string, items: RoutineExercise[]): PlanExercise[] {
+  const bySlug = new Map(db.exercises.filter((item) => item.slug).map((item) => [item.slug as string, item]));
+  return items.map((item, index) => {
+    const exercise = bySlug.get(item.slug);
+    if (!exercise) throw new Error("Falta un ejercicio del pack en la biblioteca.");
+    const id = newId();
+    const stamp = now();
+    return {
+      id,
+      user_id: db.profile.id,
+      plan_day_id: dayId,
+      exercise_id: exercise.id,
+      client_id: id,
+      sort_order: index,
+      target_sets: item.sets,
+      target_reps_min: item.repsMin,
+      target_reps_max: item.repsMax,
+      target_seconds: item.seconds,
+      rest_seconds: item.rest,
+      notes: "",
+      created_at: stamp,
+      updated_at: stamp,
+      exercise,
+    };
+  });
+}
+
+function materializeWeekPack(db: Database, packId: string, activate: boolean) {
+  const pack = WEEK_PACKS.find((item) => item.id === packId);
+  if (!pack) throw new Error("No encontramos ese pack.");
+  const marker = weekPackClientId(pack.id);
+  let plan = db.plans.find((item) => item.client_id === marker);
+  if (!plan) {
+    const activeId = newId();
+    const byDay = new Map(pack.days.map((day) => [day.weekday, day.packId]));
+    const stamp = now();
+    const created: PlanTree = {
+      id: activeId,
+      user_id: db.profile.id,
+      client_id: marker,
+      name: pack.name,
+      is_active: false,
+      created_at: stamp,
+      updated_at: stamp,
+      days: [],
+    };
+    if (pack.id === "atletico-8") {
+      const start = todayIso();
+      created.program_started_on = start;
+      created.easy_through = addIsoDays(startOfIsoWeek(start), 13);
+    }
+    for (let weekday = 1; weekday <= 7; weekday += 1) {
+      const dayId = newId();
+      const source = byDay.get(weekday);
+      const dayPack = source ? dayPackById(source) : null;
+      created.days.push({
+        id: dayId,
+        user_id: db.profile.id,
+        plan_id: activeId,
+        client_id: dayId,
+        weekday,
+        label: dayPack?.label ?? (pack.id === "atletico-8" ? "Descanso" : "Actividad libre"),
+        day_kind: dayPack ? "strength" : pack.id === "atletico-8" ? "rest" : "free",
+        sort_order: weekday - 1,
+        created_at: stamp,
+        updated_at: stamp,
+        exercises: dayPack ? planExercises(db, dayId, dayPack.exercises) : [],
+      });
+    }
+    db.plans.unshift(created);
+    plan = created;
+  }
+  if (activate) {
+    for (const item of db.plans) item.is_active = item.id === plan.id;
+    db.profile.active_plan_id = plan.id;
+    db.profile.updated_at = now();
+  }
+  return plan.id;
+}
+
+function ensureAthleticPlan(db: Database) {
+  const marker = weekPackClientId("atletico-8");
+  const existing = db.plans.find((plan) => plan.client_id === marker);
+  if (!existing) {
+    materializeWeekPack(db, "atletico-8", true);
+    write(db);
+    return;
+  }
+  let changed = false;
+  for (const day of existing.days) {
+    if (day.exercises.length === 0 && day.day_kind !== "rest") {
+      day.label = "Descanso";
+      day.day_kind = "rest";
+      changed = true;
+    }
+  }
+  if (changed) write(db);
+}
+
+export async function installWeekPack(packId: string) {
+  const db = await load();
+  const activeId = materializeWeekPack(db, packId, true);
+  write(db);
+  return activeId;
+}
+
+export async function setEasyThrough(planId: string, through: string) {
+  const db = await load();
+  const plan = db.plans.find((item) => item.id === planId);
+  if (!plan) return;
+  plan.easy_through = through;
+  plan.updated_at = now();
+  write(db);
+}
+
+export async function swapThisWeek(dayA: PlanDay, dayB: PlanDay) {
+  const monday = startOfIsoWeek(todayIso());
+  const dateA = addIsoDays(monday, dayA.weekday - 1);
+  const dateB = addIsoDays(monday, dayB.weekday - 1);
+  await movePlanDay(dayA.id, dateA, dateB);
+  await movePlanDay(dayB.id, dateB, dateA);
+}
+
+export async function applyDayPack(plan: PlanTree, dayId: string, packId: string) {
+  const pack = dayPackById(packId);
+  if (!pack) throw new Error("No encontramos ese pack.");
+  const db = await load();
+  const current = db.plans.find((item) => item.id === plan.id) ?? plan;
+  const day = current.days.find((item) => item.id === dayId);
+  if (!day) throw new Error("No encontramos ese día.");
+  putPlan(db, {
+    ...current,
+    updated_at: now(),
+    days: current.days.map((item) =>
+      item.id === dayId
+        ? { ...item, label: pack.label, day_kind: "strength", exercises: planExercises(db, item.id, pack.exercises), updated_at: now() }
+        : item,
+    ),
+  });
+  write(db);
+}
+
 export async function activatePlan(planId: string) {
   const db = await load();
   for (const plan of db.plans) plan.is_active = plan.id === planId;
@@ -373,6 +520,7 @@ export async function startSession(plan: PlanTree | null, day: PlanDay | null) {
   if (existing) return clone(existing);
   const sessionId = newId();
   const suggestions = suggestionMap(db, day?.exercises.map((item) => item.exercise_id) ?? []);
+  const easy = isEasyWeek(plan?.program_started_on, plan?.easy_through, todayIso());
   const session: SessionTree = {
     id: sessionId,
     user_id: db.profile.id,
@@ -392,7 +540,8 @@ export async function startSession(plan: PlanTree | null, day: PlanDay | null) {
   };
   let order = 0;
   for (const planned of day?.exercises ?? []) {
-    session.exercises.push(buildBlock(db.profile.id, sessionId, planned.exercise, order, planned, suggestions.get(planned.exercise_id) ?? null));
+    const prescribed = easy && planned.target_sets >= 3 ? { ...planned, target_sets: 2 } : planned;
+    session.exercises.push(buildBlock(db.profile.id, sessionId, planned.exercise, order, prescribed, suggestions.get(planned.exercise_id) ?? null));
     order += 1;
   }
   db.sessions.unshift(session);

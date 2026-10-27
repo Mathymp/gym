@@ -8,7 +8,7 @@ const buttonStyles = cva(
   {
     variants: {
       variant: {
-        primary: "bg-lime text-ink shadow-[0_10px_24px_rgba(29,78,216,0.28)] hover:bg-lime-deep",
+        primary: "bg-lime text-white shadow-[0_10px_24px_rgba(29,78,216,0.28)] hover:bg-lime-deep",
         surface: "border border-line bg-surface text-foreground shadow-sm hover:bg-raised",
         ghost: "bg-transparent text-foreground hover:bg-raised",
         danger: "border border-danger/30 bg-surface text-danger",

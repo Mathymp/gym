@@ -1,23 +1,24 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { BookOpen, CalendarDays, Dumbbell, Play, Scale } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { machinePhotoSrc } from "@/components/machine-motion";
 import { Button, EmptyState, InlineError, Page, Sheet } from "@/components/ui";
 import { ScreenSkeleton } from "@/components/shell";
-import { startSession, swapPlanDays } from "@/lib/api";
+import { DayPackList } from "@/features/day-packs";
+import { applyDayPack, setEasyThrough, startSession, swapPlanDays, swapThisWeek, todayIso } from "@/lib/api";
+import { endOfIsoWeek, isEasyWeek, programPhase } from "@/lib/program";
 import { humanError } from "@/lib/errors";
 import {
   addIsoDays,
   formatKg,
   formatLongDate,
   formatMediumDate,
-  formatMinutes,
   santiagoDate,
   santiagoWeekday,
   startOfIsoWeek,
   WEEKDAY_LABELS,
 } from "@/lib/format";
-import { countInWeek, plannedDayIdsForDate, sessionDurationMs, trainingStreak, weightGoalRatio } from "@/lib/metrics";
+import { countInWeek, plannedDayIdsForDate, trainingStreak, weightGoalRatio } from "@/lib/metrics";
 import type { PlanDay } from "@/lib/types";
 import { WeightChart, type WeightPoint } from "@/features/progress/charts";
 import { useActivePlan, useCardio, useGoals, useHistory, useOpenSession, useOverrides, useRefresh, useWeights } from "@/features/use-data";
@@ -60,14 +61,17 @@ export function HomeScreen() {
     completedDates: sessionDates,
     overrides: (overrides.data ?? []).map((item) => ({ plan_day_id: item.plan_day_id, from_date: item.from_date, to_date: item.to_date })),
   });
-  const totalSeconds = sessions.reduce((sum, item) => sum + sessionDurationMs(item) / 1000, 0);
   const last = sessions[0];
   const points = weightPoints(sortedWeights, today);
   const openSession = open.data;
-  const weekTarget = weeklyTarget ? Number(weeklyTarget.target_value) : strengthDays.length || 4;
+  const phase = programPhase(plan?.program_started_on, plan?.easy_through, today);
+  const weekTarget = plan?.program_started_on ? strengthDays.length : weeklyTarget ? Number(weeklyTarget.target_value) : strengthDays.length || 4;
   const weekRatio = weekTarget > 0 ? Math.min(1, trainedThisWeek / weekTarget) : 0;
   const weekPercent = Math.round(weekRatio * 100);
   const otherDays = (plan?.days ?? []).filter((item) => item.id !== day?.id);
+  const easy = isEasyWeek(plan?.program_started_on, plan?.easy_through, today);
+  const todayTitle = day?.day_kind === "strength" || day?.day_kind === "rest" ? day.label : "Día libre";
+  const cover = day?.exercises[0]?.exercise;
 
   async function begin(selected: PlanDay | null) {
     setPending(true);
@@ -83,14 +87,46 @@ export function HomeScreen() {
     }
   }
 
-  async function replaceDay(other: PlanDay) {
+  async function replaceDay(other: PlanDay, always: boolean) {
     if (!plan || !day) return;
     setSwapPending(true);
     try {
-      await swapPlanDays(plan, day.id, other.id);
+      if (always) {
+        await swapPlanDays(plan, day.id, other.id);
+        toast.success(`${day.label} y ${other.label} quedan intercambiados todas las semanas.`);
+      } else {
+        await swapThisWeek(day, other);
+        toast.success(`Solo esta semana cambian ${day.label} y ${other.label}. Las siguientes siguen el plan.`);
+      }
       await refresh();
       setSwapOpen(false);
-      toast.success(`Hoy haces ${other.label}. ${day.label} pasa a ${WEEKDAY_LABELS[other.weekday]}.`);
+    } catch (caught) {
+      toast.error(humanError(caught));
+    } finally {
+      setSwapPending(false);
+    }
+  }
+
+  async function makeEasy() {
+    if (!plan) return;
+    try {
+      await setEasyThrough(plan.id, endOfIsoWeek(todayIso()));
+      await refresh();
+      toast.success("Esta semana haces 2 series donde el plan dice 3. Las otras semanas no cambian.");
+    } catch (caught) {
+      toast.error(humanError(caught));
+    }
+  }
+
+  async function useTodayPack(packId: string, label: string) {
+    if (!plan || !day) return;
+    setSwapPending(true);
+    try {
+      await applyDayPack(plan, day.id, packId);
+      await refresh();
+      setSwapOpen(false);
+      const openOnThisDay = openSession?.plan_day_id === day.id;
+      toast.success(openOnThisDay ? `Las próximas veces hoy es ${label}. La sesión abierta sigue igual.` : `Hoy haces ${label}.`);
     } catch (caught) {
       toast.error(humanError(caught));
     } finally {
@@ -99,74 +135,74 @@ export function HomeScreen() {
   }
 
   return (
-    <Page className="gap-5 pt-5">
-      <header className="flex items-end justify-between gap-3">
+    <Page className="gap-6 pt-2">
+      <header className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm text-muted">{formatLongDate()}</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">Hola, {name}</h1>
+          <p className="mt-1 text-sm text-muted">{trainedThisWeek} de {weekTarget} esta semana{streak > 0 ? ` · racha ${streak}` : ""}</p>
         </div>
+        <WeekRing ratio={weekRatio} label={`${weekPercent} por ciento de la semana`} />
       </header>
 
-      <section className="rounded-[28px] bg-lime px-5 py-5 text-ink shadow-[0_16px_40px_rgba(29,78,216,0.28)]">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-white/80">Progreso de la semana</p>
-            <p className="mt-1 text-5xl font-semibold tabular tracking-tight">{weekPercent}%</p>
-            <p className="mt-1 text-sm text-white/80">{trainedThisWeek} de {weekTarget} entrenos</p>
-          </div>
-          <WeekRing ratio={weekRatio} label={`${weekPercent} por ciento de la semana`} />
-        </div>
-      </section>
-
-      <dl className="grid grid-cols-4 gap-2">
-        <Stat label="Peso" value={currentWeight == null ? "—" : formatKg(currentWeight).replace(/\s*kg$/, "")} unit="kg" />
-        <Stat label="Semana" value={`${trainedThisWeek}`} unit={weeklyTarget ? `/${weekTarget}` : "días"} />
-        <Stat label="Racha" value={`${streak}`} unit={streak === 1 ? "día" : "días"} />
-        <Stat label="Tiempo" value={formatMinutes(totalSeconds).replace(/\s*min$/, "").replace(/\s*h$/, "")} unit="min" />
-      </dl>
-
-      <section className="rounded-[28px] bg-surface p-4 shadow-[0_10px_30px_rgba(18,32,51,0.06)]">
-        <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-raised text-lime">
-            <Dumbbell size={22} aria-hidden />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">Hoy</p>
-            <h2 className="truncate text-xl font-semibold">{day?.day_kind === "strength" ? day.label : "Día libre"}</h2>
-            <p className="text-sm text-muted">
-              {day ? WEEKDAY_LABELS[day.weekday] : "Sin rutina"}
-              {day?.day_kind === "strength" ? ` · ${day.exercises.length} ejercicios` : " · cardio o descanso"}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-lime text-ink shadow-[0_10px_24px_rgba(29,78,216,0.28)] disabled:opacity-40"
-            aria-label={openSession ? "Continuar entrenamiento" : "Comenzar entrenamiento"}
-            disabled={pending}
-            onClick={() => void begin(day?.day_kind === "strength" ? day : null)}
-          >
-            <Play size={22} fill="currentColor" aria-hidden />
-          </button>
-        </div>
-        <Button className="mt-4 w-full" size="lg" disabled={pending} onClick={() => void begin(day?.day_kind === "strength" ? day : null)}>
-          {pending ? "Abriendo" : openSession ? "Continuar entrenamiento" : "Comenzar entrenamiento"}
+      <section>
+        {cover ? (
+          <img
+            src={machinePhotoSrc(cover.slug, cover.muscle_group)}
+            alt={`Posición de ${cover.name}`}
+            width={960}
+            height={720}
+            className="h-52 w-full rounded-[28px] bg-white object-contain"
+          />
+        ) : (
+          <div className="h-24 rounded-[28px] bg-raised" />
+        )}
+        <p className="mt-4 text-xs font-medium tracking-[0.14em] text-muted uppercase">Hoy · {day ? WEEKDAY_LABELS[day.weekday] : "Sin rutina"}</p>
+        <h2 className="mt-1 text-2xl font-semibold tracking-tight">{todayTitle}</h2>
+        <p className="mt-1 text-sm text-muted">
+          {day?.day_kind === "strength" ? `${day.exercises.length} ejercicios` : "Descanso"}
+          {phase ? ` · semana ${Math.min(phase.week, 8)} de 8` : ""}
+        </p>
+        <Button className="mt-4 w-full" size="lg" disabled={pending || day?.day_kind === "rest"} onClick={() => void begin(day?.day_kind === "strength" ? day : null)}>
+          {pending ? "Abriendo" : openSession ? "Continuar entrenamiento" : day?.day_kind === "strength" ? "Comenzar entrenamiento" : "Día de descanso"}
         </Button>
-        <Button className="mt-2 w-full" size="lg" variant="surface" disabled={!day || otherDays.length === 0 || swapPending} onClick={() => setSwapOpen(true)}>
+        <button type="button" className="mt-2 h-11 w-full text-sm font-semibold text-lime disabled:opacity-40" disabled={!day || swapPending} onClick={() => setSwapOpen(true)}>
           Cambiar este día
-        </Button>
+        </button>
+        {phase ? <p className="text-sm leading-5 text-muted">{phase.hint}</p> : null}
+        {phase && !phase.easy ? (
+          <button type="button" className="mt-2 h-11 text-sm font-semibold text-lime" onClick={() => void makeEasy()}>
+            Esta semana más fácil
+          </button>
+        ) : null}
       </section>
+
+      {day?.day_kind === "strength" ? (
+        <section>
+          <h2 className="text-sm font-semibold text-muted">Ejercicios de hoy</h2>
+          <ul className="mt-2">
+            {day.exercises.map((item) => {
+              const sets = easy && item.target_sets >= 3 ? 2 : item.target_sets;
+              const reps = item.target_seconds
+                ? `${item.target_seconds} s`
+                : item.target_reps_min && item.target_reps_max && item.target_reps_min !== item.target_reps_max
+                  ? `${item.target_reps_min}–${item.target_reps_max}`
+                  : `${item.target_reps_min ?? item.target_reps_max ?? ""}`;
+              return (
+                <li key={item.id} className="flex items-center gap-3 border-b border-line py-3">
+                  <img src={machinePhotoSrc(item.exercise.slug, item.exercise.muscle_group)} alt="" width={64} height={64} className="h-16 w-16 shrink-0 rounded-xl bg-white object-contain" />
+                  <span className="min-w-0">
+                    <span className="block font-medium">{item.exercise.name}</span>
+                    <span className="text-sm text-muted">{sets} × {reps}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-muted">Accesos</h2>
-        <div className="grid grid-cols-4 gap-2">
-          <Quick to="/entrenar/ejercicios" icon={BookOpen} label="Ejercicios" />
-          <Quick to={plan ? `/entrenar/rutina/${plan.id}` : "/entrenar"} icon={Dumbbell} label="Rutina" />
-          <Quick to="/progreso/peso" icon={Scale} label="Peso" />
-          <Quick to="/calendario" icon={CalendarDays} label="Agenda" />
-        </div>
-      </section>
-
-      <section className="rounded-[28px] bg-surface p-4 shadow-[0_10px_30px_rgba(18,32,51,0.06)]">
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Peso</h2>
           {currentWeight != null ? <p className="text-sm tabular text-muted">{formatKg(currentWeight)}</p> : null}
@@ -185,26 +221,29 @@ export function HomeScreen() {
 
       <Sheet open={swapOpen} title="Cambiar el día de hoy" onClose={() => setSwapOpen(false)}>
         <p className="text-sm leading-6 text-muted">
-          {day ? `Hoy está ${day.label}. Elige otro día: se intercambian y la rutina queda así para las próximas semanas.` : "No hay un día para mover."}
+          {day ? `Hoy está ${day.label}. Solo esta semana mueve ese entreno y el otro. Las semanas que vienen siguen el orden del plan, salvo que elijas siempre.` : "No hay un día para mover."}
         </p>
-        <ul className="mt-4 flex flex-col gap-2">
-          {otherDays.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                disabled={swapPending}
-                className="flex min-h-16 w-full items-center justify-between rounded-2xl bg-raised px-4 text-left disabled:opacity-40"
-                onClick={() => void replaceDay(item)}
-              >
-                <span>
-                  <span className="block font-semibold">{item.label}</span>
-                  <span className="text-sm text-muted">{WEEKDAY_LABELS[item.weekday]} · {item.exercises.length} ejercicios</span>
-                </span>
-                <span className="text-sm font-semibold text-lime">Usar hoy</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        {otherDays.length > 0 ? (
+          <ul className="mt-4 flex flex-col gap-3">
+            {otherDays.map((item) => (
+              <li key={item.id} className="rounded-2xl bg-raised px-4 py-3">
+                <p className="font-semibold">{item.label}</p>
+                <p className="text-sm text-muted">{WEEKDAY_LABELS[item.weekday]} · {item.exercises.length} ejercicios</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" disabled={swapPending} className="h-11 rounded-full bg-lime px-4 text-sm font-semibold text-white disabled:opacity-40" onClick={() => void replaceDay(item, false)}>
+                    Solo esta semana
+                  </button>
+                  <button type="button" disabled={swapPending} className="h-11 rounded-full bg-surface px-4 text-sm font-semibold text-foreground disabled:opacity-40" onClick={() => void replaceDay(item, true)}>
+                    Siempre
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <h3 className="mt-6 text-sm font-semibold">Packs por zona</h3>
+        <p className="mt-1 mb-4 text-sm leading-6 text-muted">El pack queda en este día de la semana. Los otros días no se mueven.</p>
+        <DayPackList action="Poner hoy" pending={swapPending} onPick={(pack) => void useTodayPack(pack.id, pack.label)} />
       </Sheet>
     </Page>
   );
@@ -235,44 +274,25 @@ function weightPoints(weights: Array<{ logged_at: string; weight_kg: number }>, 
   });
 }
 
-function Stat({ label, value, unit }: { label: string; value: string; unit: string }) {
-  return (
-    <div className="rounded-2xl bg-surface px-2 py-3 text-center shadow-[0_8px_20px_rgba(18,32,51,0.05)]">
-      <dt className="text-[11px] text-faint">{label}</dt>
-      <dd className="mt-1 text-lg font-semibold tabular leading-none">{value}</dd>
-      <p className="mt-1 text-[11px] text-muted">{unit}</p>
-    </div>
-  );
-}
-
-function Quick({ to, icon: Icon, label }: { to: string; icon: typeof Dumbbell; label: string }) {
-  return (
-    <Link to={to} className="flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-2xl bg-surface text-center shadow-[0_8px_20px_rgba(18,32,51,0.05)]">
-      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-raised text-lime">
-        <Icon size={16} aria-hidden />
-      </span>
-      <span className="text-[11px] font-medium">{label}</span>
-    </Link>
-  );
-}
-
 function WeekRing({ ratio, label }: { ratio: number; label: string }) {
-  const radius = 28;
+  const radius = 22;
   const length = 2 * Math.PI * radius;
+  const percent = Math.round(ratio * 100);
   return (
-    <svg width="84" height="84" viewBox="0 0 84 84" role="img" aria-label={label}>
-      <circle cx="42" cy="42" r={radius} fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="8" />
+    <svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label={label} className="shrink-0">
+      <circle cx="32" cy="32" r={radius} fill="none" stroke="#d5e1f0" strokeWidth="6" />
       <circle
-        cx="42"
-        cy="42"
+        cx="32"
+        cy="32"
         r={radius}
         fill="none"
-        stroke="white"
-        strokeWidth="8"
+        stroke="#1d4ed8"
+        strokeWidth="6"
         strokeLinecap="round"
         strokeDasharray={`${length * ratio} ${length}`}
-        transform="rotate(-90 42 42)"
+        transform="rotate(-90 32 32)"
       />
+      <text x="32" y="36" textAnchor="middle" fill="#122033" fontSize="13" fontWeight="600">{percent}</text>
     </svg>
   );
 }

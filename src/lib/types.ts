@@ -53,6 +53,8 @@ export type WorkoutPlan = {
   client_id: string;
   name: string;
   is_active: boolean;
+  program_started_on?: string | null;
+  easy_through?: string | null;
   created_at: string;
   updated_at: string;
 };

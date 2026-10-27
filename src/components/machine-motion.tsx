@@ -100,7 +100,7 @@ const FALLBACK: Record<MuscleGroup, Kind> = {
 
 export function machinePhotoSrc(slug: string | null, muscle: MuscleGroup) {
   const kind = (slug && KIND[slug]) || FALLBACK[muscle];
-  return `${import.meta.env.BASE_URL}machines/${kind}.jpg`;
+  return `${import.meta.env.BASE_URL}machines/${kind}.jpg?v=3`;
 }
 
 export function MachineMotion({
@@ -118,7 +118,7 @@ export function MachineMotion({
     <figure className={compact ? "mt-3" : ""}>
       <img
         src={machinePhotoSrc(slug, muscle)}
-        alt={`Máquina de ${name} sobre fondo blanco`}
+        alt={`Posición de ${name}`}
         width={960}
         height={720}
         className={`block w-full rounded-2xl bg-white object-contain ${compact ? "h-36" : "h-56"}`}
