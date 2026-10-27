@@ -9,6 +9,7 @@ import { formatClock, formatKg, formatMediumDate, formatMinutes } from "@/lib/fo
 import { effectiveSets, recordsInSession, sessionDurationMs, volumeOf } from "@/lib/metrics";
 import { newId } from "@/lib/utils";
 import { MUSCLE_LABEL, type Exercise, type SessionExercise, type SessionTree, type TrackingType, type WorkoutSet } from "@/lib/types";
+import { MachineMotion } from "@/components/machine-motion";
 import { useEntries, useExercises, useHistory, useProfile, useRefresh, useSession, useSetSession } from "@/features/use-data";
 
 export function SessionScreen() {
@@ -153,7 +154,7 @@ export function SessionScreen() {
         <Button className="mt-4 w-full" size="lg" onClick={() => void onFinish()}>Terminar y ver resumen</Button>
       </Sheet>
       <Sheet open={confirmDiscard} title="Descartar sesión" onClose={() => setConfirmDiscard(false)}>
-        <p className="text-sm leading-6 text-muted">La sesión quedará fuera de tus estadísticas. Las series ya sincronizadas no se borran del historial del ejercicio si ya estaban completadas.</p>
+        <p className="text-sm leading-6 text-muted">La sesión no entra en tus estadísticas ni en el historial de ejercicios.</p>
         <Button className="mt-4 w-full" variant="surface" size="lg" onClick={() => void onDiscard()}>Sacarla de las estadísticas</Button>
       </Sheet>
       <Sheet open={Boolean(pickerFor) || adding} title={adding ? "Agregar ejercicio" : "Cambiar ejercicio"} onClose={() => { setPickerFor(null); setAdding(false); }}>
@@ -197,6 +198,7 @@ function ExerciseBlock({
         </div>
         <button className="h-11 text-sm text-lime" onClick={onSubstitute}>Cambiar</button>
       </div>
+      <MachineMotion compact slug={block.exercise.slug} name={block.exercise.name} muscle={block.exercise.muscle_group} />
       {previous ? <p className="mt-2 text-sm text-faint">Última sesión: {previous}</p> : <p className="mt-2 text-sm text-faint">Sin cargas anteriores.</p>}
       <div className="mt-3 flex flex-col gap-2">
         {block.sets.map((set) => (
@@ -297,7 +299,7 @@ function SetRow({
           {set.is_warmup ? "Calentamiento" : "Serie efectiva"}
         </button>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         {tracking === "weight_reps" || tracking === "reps" ? (
           tracking === "weight_reps" ? <Stepper label="Peso" unit="kg" step={2.5} value={weight} onChange={setWeight} /> : null
         ) : null}

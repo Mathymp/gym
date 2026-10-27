@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 
 const exercises = [
   ["press-banca", "Press banca", "pecho", ["Hombros", "Tríceps"], "Barra y banco", "weight_reps", "Acuéstate con los pies firmes y la barra sobre los hombros. Baja hasta el pecho y empuja sin rebotar.", "Rebotar la barra o despegar la pelvis del banco.", ["press-pecho-maquina", "press-inclinado-barra"]],
@@ -105,4 +105,179 @@ on conflict (id) do update set
 `;
 
 writeFileSync(new URL("../supabase/migrations/002_exercises.sql", import.meta.url), sql);
+
+const now = "2026-10-27T15:00:00.000Z";
+const userId = "mathy";
+const planId = idFor("plan-base");
+const catalog = exercises.map((item) => {
+  const [slug, name, group, secondary, equipment, tracking, instructions, mistakes, alternatives] = item;
+  const id = idFor(slug);
+  return {
+    id,
+    user_id: null,
+    client_id: id,
+    slug,
+    name,
+    muscle_group: group,
+    secondary_muscles: secondary,
+    equipment,
+    machine_name: null,
+    instructions,
+    common_mistakes: mistakes,
+    alternative_slugs: alternatives,
+    tracking_type: tracking,
+    created_at: now,
+    updated_at: now,
+  };
+});
+const bySlug = new Map(catalog.map((item) => [item.slug, item]));
+const routine = [
+  ["tren-superior-a", 1, "Tren superior A", "strength", [
+    ["press-pecho-maquina", 3, 10, 10, null, 90],
+    ["jalon-pecho", 3, 10, 12, null, 90],
+    ["remo-sentado", 3, 10, 12, null, 90],
+    ["elevaciones-laterales", 3, 12, 15, null, 60],
+    ["curl-biceps", 2, 12, 12, null, 60],
+    ["extension-polea", 2, 12, 12, null, 60],
+  ]],
+  ["piernas-a", 2, "Piernas A", "strength", [
+    ["prensa-piernas", 3, 12, 12, null, 90],
+    ["peso-muerto-rumano-mancuernas", 3, 10, 10, null, 90],
+    ["curl-femoral-sentado", 3, 12, 12, null, 75],
+    ["elevaciones-pantorrillas", 3, 15, 15, null, 45],
+    ["plancha", 3, null, null, 30, 45],
+  ]],
+  ["libre-mie", 3, "Actividad libre", "free", []],
+  ["tren-superior-b", 4, "Tren superior B", "strength", [
+    ["press-inclinado-mancuernas", 3, 10, 10, null, 90],
+    ["remo-maquina", 3, 10, 10, null, 90],
+    ["jalon-pecho", 3, 10, 10, null, 90],
+    ["press-hombros", 2, 10, 10, null, 75],
+    ["curl-biceps", 2, 12, 12, null, 60],
+    ["extension-triceps", 2, 12, 12, null, 60],
+  ]],
+  ["piernas-b", 5, "Piernas B", "strength", [
+    ["sentadilla-goblet", 3, 10, 10, null, 90],
+    ["hip-thrust", 3, 12, 12, null, 90],
+    ["extension-cuadriceps", 3, 12, 12, null, 75],
+    ["curl-femoral-acostado", 3, 12, 12, null, 75],
+    ["elevaciones-rodillas", 3, 12, 12, null, 45],
+  ]],
+  ["libre-sab", 6, "Actividad libre", "free", []],
+  ["libre-dom", 7, "Actividad libre", "free", []],
+];
+const days = routine.map((day, index) => {
+  const [key, weekday, label, dayKind, items] = day;
+  const dayId = idFor(`day-${key}`);
+  return {
+    id: dayId,
+    user_id: userId,
+    plan_id: planId,
+    client_id: dayId,
+    weekday,
+    label,
+    day_kind: dayKind,
+    sort_order: index,
+    created_at: now,
+    updated_at: now,
+    exercises: items.map((item, exerciseIndex) => {
+      const [slug, sets, repsMin, repsMax, seconds, rest] = item;
+      const exercise = bySlug.get(slug);
+      if (!exercise) throw new Error(`Falta el ejercicio ${slug}`);
+      const rowId = idFor(`plan-ex-${key}-${slug}`);
+      return {
+        id: rowId,
+        user_id: userId,
+        plan_day_id: dayId,
+        exercise_id: exercise.id,
+        client_id: rowId,
+        sort_order: exerciseIndex,
+        target_sets: sets,
+        target_reps_min: repsMin,
+        target_reps_max: repsMax,
+        target_seconds: seconds,
+        rest_seconds: rest,
+        notes: "",
+        created_at: now,
+        updated_at: now,
+        exercise,
+      };
+    }),
+  };
+});
+const weightId = idFor("weight-inicial");
+const goalWeightId = idFor("goal-weight");
+const goalWeekId = idFor("goal-week");
+const database = {
+  updatedAt: now,
+  profile: {
+    id: userId,
+    display_name: "Mathy",
+    height_cm: 170,
+    timezone: "America/Santiago",
+    onboarding_completed: true,
+    active_plan_id: planId,
+    preferred_rest_seconds: 90,
+    rest_timer_enabled: true,
+    sound_enabled: false,
+    created_at: now,
+    updated_at: now,
+  },
+  exercises: catalog,
+  plans: [{
+    id: planId,
+    user_id: userId,
+    client_id: planId,
+    name: "Mi rutina",
+    is_active: true,
+    created_at: now,
+    updated_at: now,
+    days,
+  }],
+  sessions: [],
+  weights: [{
+    id: weightId,
+    user_id: userId,
+    client_id: weightId,
+    logged_at: now,
+    weight_kg: 83,
+    notes: "Peso inicial",
+    created_at: now,
+    updated_at: now,
+  }],
+  measurements: [],
+  cardio: [],
+  goals: [
+    {
+      id: goalWeightId,
+      user_id: userId,
+      client_id: goalWeightId,
+      goal_type: "body_weight",
+      target_value: 76,
+      exercise_id: null,
+      measurement_key: null,
+      label: "Peso",
+      deadline: null,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      id: goalWeekId,
+      user_id: userId,
+      client_id: goalWeekId,
+      goal_type: "weekly_workouts",
+      target_value: 4,
+      exercise_id: null,
+      measurement_key: null,
+      label: "Entrenamientos por semana",
+      deadline: null,
+      created_at: now,
+      updated_at: now,
+    },
+  ],
+  overrides: [],
+  photos: [],
+};
+mkdirSync(new URL("../public/data/", import.meta.url), { recursive: true });
+writeFileSync(new URL("../public/data/forma.json", import.meta.url), JSON.stringify(database));
 console.log(`wrote ${exercises.length} exercises`);

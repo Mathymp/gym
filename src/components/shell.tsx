@@ -1,9 +1,6 @@
 import { CalendarDays, Dumbbell, House, TrendingUp, UserRound } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
-import { useEffect, useSyncExternalStore } from "react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { consumeSyncNotice, flush, getSyncPhase, subscribeSync, type SyncPhase } from "@/lib/sync";
 
 const items = [
   { to: "/", label: "Inicio", icon: House, end: true },
@@ -13,24 +10,7 @@ const items = [
   { to: "/perfil", label: "Perfil", icon: UserRound, end: false },
 ];
 
-const syncCopy: Record<SyncPhase, string> = {
-  local: "Guardado en el teléfono",
-  syncing: "Sincronizando",
-  synced: "Sincronizado",
-  error: "Error de sincronización",
-};
-
-function useSyncPhase() {
-  return useSyncExternalStore(subscribeSync, getSyncPhase, getSyncPhase);
-}
-
 export function AppShell() {
-  const phase = useSyncPhase();
-  useEffect(() => {
-    const notice = consumeSyncNotice();
-    if (notice) toast(notice);
-  }, [phase]);
-
   return (
     <div className="min-h-dvh">
       <main className="pb-28">
@@ -52,15 +32,7 @@ export function AppShell() {
             </NavLink>
           ))}
         </div>
-        <button
-          className={cn(
-            "block w-full pb-1 text-center text-[11px]",
-            phase === "error" ? "text-danger" : phase === "synced" ? "text-faint" : "text-lime",
-          )}
-          onClick={() => void flush()}
-        >
-          {syncCopy[phase]}
-        </button>
+        <p className="pb-1 text-center text-[11px] text-faint">Guardado en este teléfono</p>
       </nav>
     </div>
   );

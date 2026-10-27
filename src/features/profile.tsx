@@ -1,18 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ScreenSkeleton } from "@/components/shell";
 import { Button, EmptyState, InlineError, Kicker, Page, TextField } from "@/components/ui";
 import {
   deleteGoal,
-  fetchCardio,
-  fetchGoals,
-  fetchMeasurements,
-  fetchPhotos,
-  fetchPlans,
-  fetchProfile,
-  fetchSessions,
-  fetchWeights,
+  exportFile,
+  resetFile,
   saveGoal,
   saveProfile,
   type CompletedEntry,
@@ -33,7 +26,6 @@ import {
   goalProgress,
   weightGoalRatio,
 } from "@/lib/metrics";
-import { requireClient } from "@/lib/supabase";
 import { newId } from "@/lib/utils";
 import {
   MEASUREMENT_FIELDS,
@@ -69,7 +61,6 @@ export function ProfileScreen() {
   const cardio = useCardio();
   const entries = useEntries();
   const exercises = useExercises();
-  const navigate = useNavigate();
 
   const [name, setName] = useState("");
   const [height, setHeight] = useState("");
@@ -301,37 +292,17 @@ export function ProfileScreen() {
     }
   }
 
-  async function exportJson() {
+  async function installApp() {
+    if (!installEvent) return;
+    await installEvent.prompt();
+    setInstallEvent(null);
+  }
+
+  async function downloadFile() {
     setExportPending(true);
     try {
-      const [freshProfile, freshPlans, freshSessions, freshWeights, freshMeasures, freshCardio, freshGoals, freshPhotos] =
-        await Promise.all([
-          fetchProfile(),
-          fetchPlans(),
-          fetchSessions(),
-          fetchWeights(),
-          fetchMeasurements(),
-          fetchCardio(),
-          fetchGoals(),
-          fetchPhotos(),
-        ]);
-      const payload = {
-        profile: freshProfile,
-        plans: freshPlans,
-        sessions: freshSessions,
-        weights: freshWeights,
-        measurements: freshMeasures,
-        cardio: freshCardio,
-        goals: freshGoals,
-        photos: freshPhotos.map((photo) => ({
-          id: photo.id,
-          taken_at: photo.taken_at,
-          angle: photo.angle,
-          storage_path: photo.storage_path,
-          notes: photo.notes,
-        })),
-      };
-      downloadText("forma-respaldo.json", JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
+      const data = await exportFile();
+      downloadText("forma.json", JSON.stringify(data, null, 2), "application/json;charset=utf-8");
     } catch (caught) {
       toast.error(humanError(caught));
     } finally {
@@ -339,16 +310,12 @@ export function ProfileScreen() {
     }
   }
 
-  async function installApp() {
-    if (!installEvent) return;
-    await installEvent.prompt();
-    setInstallEvent(null);
-  }
-
-  async function signOut() {
+  async function resetData() {
+    const accepted = window.confirm("Esto borra los registros de este teléfono y vuelve a data/forma.json. Las fotos de progreso de este teléfono también se borran.");
+    if (!accepted) return;
     try {
-      await requireClient().auth.signOut();
-      navigate("/ingresar");
+      await resetFile();
+      window.location.assign(import.meta.env.BASE_URL);
     } catch (caught) {
       toast.error(humanError(caught));
     }
@@ -359,6 +326,9 @@ export function ProfileScreen() {
       <header>
         <Kicker>Perfil</Kicker>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">{profile.data.display_name}</h1>
+        <p className="mt-3 max-w-md text-sm leading-6 text-muted">
+          Tus registros viven en este teléfono, con la misma forma que data/forma.json. Un teléfono nuevo abre esa copia. Las fotos de progreso se quedan solo en el teléfono donde las tomaste.
+        </p>
       </header>
 
       <section className="border-t border-line pt-5">
@@ -508,8 +478,8 @@ export function ProfileScreen() {
           <Button type="button" variant="surface" size="lg" disabled={exportPending} onClick={() => void exportMeasuresCsv()}>
             CSV medidas
           </Button>
-          <Button type="button" variant="surface" size="lg" disabled={exportPending} onClick={() => void exportJson()}>
-            JSON respaldo
+          <Button type="button" variant="surface" size="lg" disabled={exportPending} onClick={() => void downloadFile()}>
+            Descargar forma.json
           </Button>
         </div>
       </section>
@@ -529,8 +499,8 @@ export function ProfileScreen() {
         )}
       </section>
 
-      <Button type="button" variant="danger" size="lg" className="w-full" onClick={() => void signOut()}>
-        Cerrar sesión
+      <Button type="button" variant="danger" size="lg" className="w-full" onClick={() => void resetData()}>
+        Volver al archivo inicial
       </Button>
     </Page>
   );

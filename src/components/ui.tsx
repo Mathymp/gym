@@ -138,15 +138,15 @@ export function Stepper({
     onChange(Math.min(max, Math.max(min, next)));
   };
   return (
-    <div className="flex items-center rounded-2xl bg-background">
-      <button type="button" className="h-12 w-12 text-xl" aria-label={`Bajar ${label}`} onClick={() => change(-step)}>
+    <div className="flex min-w-0 flex-1 items-center rounded-2xl bg-background">
+      <button type="button" className="h-12 w-11 shrink-0 text-xl" aria-label={`Bajar ${label}`} onClick={() => change(-step)}>
         −
       </button>
-      <label className="flex min-w-16 flex-col items-center">
+      <label className="flex min-w-0 flex-1 flex-col items-center">
         <span className="sr-only">{label}</span>
         <input
           inputMode="decimal"
-          className="w-16 bg-transparent text-center text-lg tabular outline-none"
+          className="w-full min-w-0 bg-transparent text-center text-lg tabular outline-none"
           value={value ?? ""}
           placeholder="0"
           onChange={(event) => {
@@ -157,7 +157,7 @@ export function Stepper({
         />
         <span className="text-[11px] text-faint">{unit}</span>
       </label>
-      <button type="button" className="h-12 w-12 text-xl" aria-label={`Subir ${label}`} onClick={() => change(step)}>
+      <button type="button" className="h-12 w-11 shrink-0 text-xl" aria-label={`Subir ${label}`} onClick={() => change(step)}>
         +
       </button>
     </div>

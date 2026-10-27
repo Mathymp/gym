@@ -4,9 +4,8 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { registerSW } from "virtual:pwa-register";
 import { AppShell, ScreenSkeleton } from "@/components/shell";
-import { supabaseEnv } from "@/lib/env";
 import { AuthProvider } from "@/features/auth-context";
-import { AuthScreen, RequireUser, SetupScreen } from "@/features/auth";
+import { RequireUser } from "@/features/auth";
 
 const HomeScreen = lazy(() => import("@/features/home").then((module) => ({ default: module.HomeScreen })));
 const OnboardingScreen = lazy(() => import("@/features/onboarding").then((module) => ({ default: module.OnboardingScreen })));
@@ -30,42 +29,40 @@ const queryClient = new QueryClient({
   },
 });
 
+const basename = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export function App() {
   useEffect(() => {
-    if (supabaseEnv.configured) registerSW({ immediate: true });
+    registerSW({ immediate: true });
   }, []);
-
-  if (!supabaseEnv.configured) return <SetupScreen />;
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter basename={basename}>
           <Suspense fallback={<ScreenSkeleton />}>
-          <Routes>
-            <Route path="/ingresar" element={<AuthScreen mode="login" />} />
-            <Route path="/crear-cuenta" element={<AuthScreen mode="register" />} />
-            <Route element={<RequireUser />}>
-              <Route path="/onboarding" element={<OnboardingScreen />} />
-              <Route element={<AppShell />}>
-                <Route index element={<HomeScreen />} />
-                <Route path="entrenar" element={<TrainScreen />} />
-                <Route path="entrenar/rutina/:planId" element={<PlanEditorScreen />} />
-                <Route path="entrenar/ejercicios" element={<LibraryScreen />} />
-                <Route path="progreso" element={<ProgressScreen />} />
-                <Route path="progreso/peso" element={<WeightScreen />} />
-                <Route path="progreso/medidas" element={<MeasuresScreen />} />
-                <Route path="progreso/fotos" element={<PhotosScreen />} />
-                <Route path="progreso/fuerza" element={<StrengthScreen />} />
-                <Route path="progreso/fuerza/:exerciseId" element={<StrengthDetailScreen />} />
-                <Route path="progreso/historial" element={<HistoryScreen />} />
-                <Route path="calendario" element={<CalendarScreen />} />
-                <Route path="perfil" element={<ProfileScreen />} />
+            <Routes>
+              <Route element={<RequireUser />}>
+                <Route path="/onboarding" element={<OnboardingScreen />} />
+                <Route element={<AppShell />}>
+                  <Route index element={<HomeScreen />} />
+                  <Route path="entrenar" element={<TrainScreen />} />
+                  <Route path="entrenar/rutina/:planId" element={<PlanEditorScreen />} />
+                  <Route path="entrenar/ejercicios" element={<LibraryScreen />} />
+                  <Route path="progreso" element={<ProgressScreen />} />
+                  <Route path="progreso/peso" element={<WeightScreen />} />
+                  <Route path="progreso/medidas" element={<MeasuresScreen />} />
+                  <Route path="progreso/fotos" element={<PhotosScreen />} />
+                  <Route path="progreso/fuerza" element={<StrengthScreen />} />
+                  <Route path="progreso/fuerza/:exerciseId" element={<StrengthDetailScreen />} />
+                  <Route path="progreso/historial" element={<HistoryScreen />} />
+                  <Route path="calendario" element={<CalendarScreen />} />
+                  <Route path="perfil" element={<ProfileScreen />} />
+                </Route>
+                <Route path="sesion/:sessionId" element={<SessionScreen />} />
               </Route>
-              <Route path="sesion/:sessionId" element={<SessionScreen />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
           </Suspense>
         </BrowserRouter>
         <Toaster theme="dark" position="top-center" />

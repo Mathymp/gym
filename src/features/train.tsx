@@ -18,6 +18,7 @@ import { WEEKDAY_LABELS } from "@/lib/format";
 import { dayKindLabel } from "@/lib/metrics";
 import { newId } from "@/lib/utils";
 import { MUSCLE_LABEL, type DayKind, type Exercise, type MuscleGroup, type PlanDay, type PlanExercise, type TrackingType } from "@/lib/types";
+import { MachineMotion } from "@/components/machine-motion";
 import { useActivePlan, useExercises, useOpenSession, usePlans, useRefresh } from "@/features/use-data";
 
 export function TrainScreen() {
@@ -340,6 +341,7 @@ function ExerciseDetail({ exercise }: { exercise: Exercise }) {
   return (
     <div className="flex flex-col gap-4 text-sm leading-6">
       <p className="text-muted">{MUSCLE_LABEL[exercise.muscle_group]} · {exercise.equipment}</p>
+      <MachineMotion slug={exercise.slug} name={exercise.name} muscle={exercise.muscle_group} />
       {exercise.machine_name ? <p>Máquina: {exercise.machine_name}</p> : null}
       {exercise.secondary_muscles.length > 0 ? <p>También: {exercise.secondary_muscles.join(", ")}</p> : null}
       <p>{exercise.instructions}</p>
