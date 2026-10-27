@@ -1,0 +1,77 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-background: #0c0d0b;
+  --color-surface: #161814;
+  --color-raised: #1c1f1a;
+  --color-line: #2a2e26;
+  --color-foreground: #f4f5f0;
+  --color-muted: #9aa193;
+  --color-faint: #6d7266;
+  --color-lime: #d6ef6e;
+  --color-lime-deep: #c0dc4e;
+  --color-ink: #142000;
+  --color-danger: #ef6f5e;
+  --color-warning: #e2b15a;
+  --radius-xl: 1.25rem;
+}
+
+html {
+  background: #0c0d0b;
+  color: #f4f5f0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  font-family: var(--font-sans);
+  background: #0c0d0b;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+:focus-visible {
+  outline: 2px solid #d6ef6e;
+  outline-offset: 2px;
+}
+
+::selection {
+  background: #d6ef6e;
+  color: #142000;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
