@@ -12,54 +12,39 @@ function dayNumber(iso: string) {
   return Date.UTC(year, month - 1, day) / 86400000;
 }
 
-export function programPhase(startedOn: string | null | undefined, easyThrough: string | null | undefined, today: string): ProgramPhase | null {
+export function programPhase(startedOn: string | null | undefined, _easyThrough: string | null | undefined, today: string): ProgramPhase | null {
   if (!startedOn) return null;
   const elapsed = dayNumber(startOfIsoWeek(today)) - dayNumber(startOfIsoWeek(startedOn));
   const week = Math.max(1, Math.floor(elapsed / 7) + 1);
-  const forcedEasy = Boolean(easyThrough && today <= easyThrough);
   if (week <= 2) {
     return {
       week,
-      title: "Adaptación",
-      easy: true,
-      hint: "Semana de adaptación: donde el plan dice 3 series, hoy haces 2. Peso moderado, que te queden unas 2 o 3 repeticiones.",
+      title: "Retomar",
+      easy: false,
+      hint: "3 series en todo, con un peso que te deje 3 o 4 repeticiones en reserva. Si te cuesta, haz 4 o 5 ejercicios y suma el resto desde la semana 3.",
     };
   }
   if (week <= 4) {
     return {
       week,
-      title: "Series del plan",
-      easy: forcedEasy,
-      hint: forcedEasy
-        ? "Esta semana está en fácil: 2 series donde el plan dice 3."
-        : "Haz las series del plan. Busca el rango de repeticiones con buena postura.",
-    };
-  }
-  if (week <= 6) {
-    return {
-      week,
-      title: "Sube el peso",
-      easy: forcedEasy,
-      hint: forcedEasy
-        ? "Esta semana está en fácil: 2 series donde el plan dice 3."
-        : "Si completas el tope de repeticiones en todas las series, sube el peso lo mínimo.",
+      title: "Más esfuerzo",
+      easy: false,
+      hint: "Si recuperas bien, acerca el esfuerzo: que te queden 2 o 3 repeticiones en reserva.",
     };
   }
   if (week <= 8) {
     return {
       week,
-      title: "Mantén",
-      easy: forcedEasy,
-      hint: forcedEasy
-        ? "Esta semana está en fácil: 2 series donde el plan dice 3."
-        : "Sigue la progresión. En la última serie de un aislado puedes acercarte al fallo, sin perder la postura.",
+      title: "Progresa",
+      easy: false,
+      hint: "Cuando completes el tope de repeticiones con buena técnica, sube el peso. Deja 1 a 3 repeticiones en reserva, sin ir al fallo siempre.",
     };
   }
   return {
     week,
     title: "Bloque listo",
-    easy: forcedEasy,
-    hint: "Terminaron las 8 semanas. Puedes repetir el bloque o seguir con las series completas.",
+    easy: false,
+    hint: "Terminaron las 8 semanas. Revisa cómo recuperas y repite el bloque con más peso.",
   };
 }
 

@@ -273,6 +273,7 @@ export function SessionScreen() {
               block={block}
               session={session}
               previous={adviceFor(block.exercise_id)}
+              planNote={plannedDay?.exercises.find((item) => item.exercise_id === block.exercise_id)?.notes || null}
               currentSetId={restLeft > 0 ? null : upcoming?.set.id ?? null}
               onSession={commit}
               onRest={armRest}
@@ -350,6 +351,7 @@ function ExerciseBlock({
   block,
   session,
   previous,
+  planNote,
   currentSetId,
   onSession,
   onRest,
@@ -359,6 +361,7 @@ function ExerciseBlock({
   block: SessionExercise;
   session: SessionTree;
   previous: { line: string; suggestion: string } | null;
+  planNote: string | null;
   currentSetId: string | null;
   onSession: (session: SessionTree) => Promise<void>;
   onRest: () => void;
@@ -383,6 +386,7 @@ function ExerciseBlock({
         </button>
       </div>
       <ExerciseDemo exercise={block.exercise} className="mt-3" />
+      {planNote ? <p className="mt-3 text-sm leading-5 text-muted">{planNote}</p> : null}
       <div className="mt-4 rounded-2xl bg-background p-3">
         <p className="mb-2 text-[10px] font-semibold tracking-[0.14em] text-faint uppercase">Zona que trabaja</p>
         <ExerciseMuscles exercise={block.exercise} />

@@ -7,6 +7,7 @@ export type RoutineExercise = {
   repsMax: number | null;
   seconds: number | null;
   rest: number;
+  note?: string;
 };
 
 export type RoutineDay = {

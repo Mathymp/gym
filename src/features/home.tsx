@@ -6,8 +6,8 @@ import { ExerciseMotion } from "@/components/exercise-motion";
 import { Button, EmptyState, InlineError, Page, Sheet } from "@/components/ui";
 import { ScreenSkeleton } from "@/components/shell";
 import { DayPackList } from "@/features/day-packs";
-import { applyDayPack, setEasyThrough, startSession, swapPlanDays, swapThisWeek, todayIso } from "@/lib/api";
-import { endOfIsoWeek, isEasyWeek, programPhase } from "@/lib/program";
+import { applyDayPack, startSession, swapPlanDays, swapThisWeek } from "@/lib/api";
+import { programPhase } from "@/lib/program";
 import { humanError } from "@/lib/errors";
 import {
   addIsoDays,
@@ -20,7 +20,7 @@ import {
   WEEKDAY_LABELS,
 } from "@/lib/format";
 import { countInWeek, plannedDayIdsForDate, trainingStreak, weightGoalRatio } from "@/lib/metrics";
-import type { PlanDay } from "@/lib/types";
+import type { PlanDay, PlanExercise } from "@/lib/types";
 import { WeightChart, type WeightPoint } from "@/features/progress/charts";
 import { useActivePlan, useCardio, useGoals, useHistory, useOpenSession, useOverrides, useRefresh, useWeights } from "@/features/use-data";
 
@@ -70,7 +70,6 @@ export function HomeScreen() {
   const weekRatio = weekTarget > 0 ? Math.min(1, trainedThisWeek / weekTarget) : 0;
   const weekPercent = Math.round(weekRatio * 100);
   const otherDays = (plan?.days ?? []).filter((item) => item.id !== day?.id);
-  const easy = isEasyWeek(plan?.program_started_on, plan?.easy_through, today);
   const todayTitle = day?.day_kind === "strength" || day?.day_kind === "rest" ? day.label : "Día libre";
   const cover = day?.exercises[0]?.exercise;
 
@@ -105,17 +104,6 @@ export function HomeScreen() {
       toast.error(humanError(caught));
     } finally {
       setSwapPending(false);
-    }
-  }
-
-  async function makeEasy() {
-    if (!plan) return;
-    try {
-      await setEasyThrough(plan.id, endOfIsoWeek(todayIso()));
-      await refresh();
-      toast.success("Esta semana haces 2 series donde el plan dice 3. Las otras semanas no cambian.");
-    } catch (caught) {
-      toast.error(humanError(caught));
     }
   }
 
@@ -167,11 +155,6 @@ export function HomeScreen() {
           Cambiar este día
         </button>
         {phase ? <p className="text-sm leading-5 text-muted">{phase.hint}</p> : null}
-        {phase && !phase.easy ? (
-          <button type="button" className="mt-2 h-11 text-sm font-semibold text-lime" onClick={() => void makeEasy()}>
-            Esta semana más fácil
-          </button>
-        ) : null}
       </section>
 
       {day?.day_kind === "strength" ? (
@@ -182,21 +165,17 @@ export function HomeScreen() {
           </div>
           <ul className="mt-2">
             {day.exercises.map((item, index) => {
-              const sets = easy && item.target_sets >= 3 ? 2 : item.target_sets;
-              const reps = item.target_seconds
-                ? `${item.target_seconds} s`
-                : item.target_reps_min && item.target_reps_max && item.target_reps_min !== item.target_reps_max
-                  ? `${item.target_reps_min}–${item.target_reps_max}`
-                  : `${item.target_reps_min ?? item.target_reps_max ?? ""}`;
+              const prescription = prescriptionOf(item);
               return (
-                <li key={item.id} className="enter flex items-center gap-3 border-b border-line py-3 last:border-b-0" style={{ "--i": index } as CSSProperties}>
-                  <ExerciseMotion slug={item.exercise.slug} name={item.exercise.name} muscle={item.exercise.muscle_group} labelled={false} className="aspect-[3/2] w-28 shrink-0 rounded-xl" />
+                <li key={item.id} className="enter flex items-start gap-3 border-b border-line py-3 last:border-b-0" style={{ "--i": index } as CSSProperties}>
+                  <ExerciseMotion slug={item.exercise.slug} name={item.exercise.name} muscle={item.exercise.muscle_group} labelled={false} className="aspect-[3/2] w-24 shrink-0 rounded-xl" />
                   <span className="min-w-0 flex-1">
-                    <span className="block leading-5 font-semibold">{item.exercise.name}</span>
-                    <MuscleLine exercise={item.exercise} className="mt-1" />
-                  </span>
-                  <span className="shrink-0 text-right text-sm font-semibold tabular">
-                    {sets}<span className="text-faint">×</span>{reps}
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="leading-5 font-semibold">{item.exercise.name}</span>
+                      <span className="shrink-0 text-sm font-semibold tabular text-lime">{prescription}</span>
+                    </span>
+                    {item.exercise.muscle_group === "cardio" ? null : <MuscleLine exercise={item.exercise} className="mt-1" />}
+                    {item.notes ? <span className="mt-1 block text-xs leading-4 text-muted">{item.notes}</span> : null}
                   </span>
                 </li>
               );
@@ -250,6 +229,15 @@ export function HomeScreen() {
       </Sheet>
     </Page>
   );
+}
+
+function prescriptionOf(item: PlanExercise) {
+  if (item.exercise.tracking_type === "distance" && item.target_seconds) return `${Math.round(item.target_seconds / 60)} min`;
+  if (item.target_seconds) return `${item.target_sets}×${item.target_seconds} s`;
+  const reps = item.target_reps_min && item.target_reps_max && item.target_reps_min !== item.target_reps_max
+    ? `${item.target_reps_min}–${item.target_reps_max}`
+    : `${item.target_reps_min ?? item.target_reps_max ?? ""}`;
+  return `${item.target_sets}×${reps}`;
 }
 
 function resolveToday(days: PlanDay[], overrides: Array<{ plan_day_id: string; from_date: string; to_date: string }>, today: string, weekday: number) {

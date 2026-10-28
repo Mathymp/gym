@@ -398,11 +398,17 @@ function PlanExerciseRow({
           {item.exercise ? <MuscleLine exercise={item.exercise} className="mt-1" /> : null}
         </div>
       </div>
-      {item.exercise?.instructions ? <p className="mt-2 line-clamp-2 text-sm leading-5 text-muted">{item.exercise.instructions}</p> : null}
+      {item.notes ? <p className="mt-2 text-sm leading-5 text-muted">{item.notes}</p> : item.exercise?.instructions ? <p className="mt-2 line-clamp-2 text-sm leading-5 text-muted">{item.exercise.instructions}</p> : null}
       <button className="h-11 text-sm font-semibold text-lime" onClick={onReplace}>Cambiar o reemplazar</button>
       <div className="mt-3 grid grid-cols-3 gap-2">
         <Mini label="Series" value={item.target_sets} onChange={(value) => onChange({ ...item, target_sets: value })} />
-        <Mini label="Reps" value={item.target_reps_min ?? 0} onChange={(value) => onChange({ ...item, target_reps_min: value, target_reps_max: Math.max(value, item.target_reps_max ?? value) })} />
+        {item.exercise?.tracking_type === "distance" ? (
+          <Mini label="Minutos" value={Math.round((item.target_seconds ?? 0) / 60)} onChange={(value) => onChange({ ...item, target_seconds: value * 60 })} />
+        ) : item.exercise?.tracking_type === "time" ? (
+          <Mini label="Segundos" value={item.target_seconds ?? 0} onChange={(value) => onChange({ ...item, target_seconds: value })} />
+        ) : (
+          <Mini label="Reps" value={item.target_reps_min ?? 0} onChange={(value) => onChange({ ...item, target_reps_min: value, target_reps_max: Math.max(value, item.target_reps_max ?? value) })} />
+        )}
         <Mini label="Descanso" value={item.rest_seconds} onChange={(value) => onChange({ ...item, rest_seconds: value })} />
       </div>
       {confirm ? (

@@ -3,7 +3,6 @@ import { dayPackById, weekPackClientId, WEEK_PACKS } from "@/data/packs";
 import { EXTRA_EXERCISES } from "@/data/extra-exercises";
 import { buildRoutine, type RoutineExercise } from "@/data/routine";
 import { addIsoDays, santiagoDate, startOfIsoWeek } from "./format";
-import { isEasyWeek } from "./program";
 import { newId } from "./utils";
 import type {
   BodyMeasurement,
@@ -299,7 +298,7 @@ function planExercises(db: Database, dayId: string, items: RoutineExercise[]): P
       target_reps_max: item.repsMax,
       target_seconds: item.seconds,
       rest_seconds: item.rest,
-      notes: "",
+      notes: item.note ?? "",
       created_at: stamp,
       updated_at: stamp,
       exercise,
@@ -326,10 +325,9 @@ function materializeWeekPack(db: Database, packId: string, activate: boolean) {
       updated_at: stamp,
       days: [],
     };
-    if (pack.id === "atletico-8") {
-      const start = todayIso();
-      created.program_started_on = start;
-      created.easy_through = addIsoDays(startOfIsoWeek(start), 13);
+    if (pack.program) {
+      created.program_started_on = todayIso();
+      created.easy_through = null;
     }
     for (let weekday = 1; weekday <= 7; weekday += 1) {
       const dayId = newId();
@@ -341,8 +339,8 @@ function materializeWeekPack(db: Database, packId: string, activate: boolean) {
         plan_id: activeId,
         client_id: dayId,
         weekday,
-        label: dayPack?.label ?? (pack.id === "atletico-8" ? "Descanso" : "Actividad libre"),
-        day_kind: dayPack ? "strength" : pack.id === "atletico-8" ? "rest" : "free",
+        label: dayPack?.label ?? (pack.program ? "Descanso" : "Actividad libre"),
+        day_kind: dayPack ? "strength" : pack.program ? "rest" : "free",
         sort_order: weekday - 1,
         created_at: stamp,
         updated_at: stamp,
@@ -370,10 +368,10 @@ function ensureCatalog(db: Database) {
 
 function ensureAthleticPlan(db: Database) {
   ensureCatalog(db);
-  const marker = weekPackClientId("atletico-8");
+  const marker = weekPackClientId("definida-8");
   const existing = db.plans.find((plan) => plan.client_id === marker);
   if (!existing) {
-    materializeWeekPack(db, "atletico-8", true);
+    materializeWeekPack(db, "definida-8", true);
     write(db);
     return;
   }
@@ -555,7 +553,6 @@ export async function startSession(plan: PlanTree | null, day: PlanDay | null) {
   if (existing) return clone(existing);
   const sessionId = newId();
   const suggestions = suggestionMap(db, day?.exercises.map((item) => item.exercise_id) ?? []);
-  const easy = isEasyWeek(plan?.program_started_on, plan?.easy_through, todayIso());
   const session: SessionTree = {
     id: sessionId,
     user_id: db.profile.id,
@@ -575,8 +572,7 @@ export async function startSession(plan: PlanTree | null, day: PlanDay | null) {
   };
   let order = 0;
   for (const planned of day?.exercises ?? []) {
-    const prescribed = easy && planned.target_sets >= 3 ? { ...planned, target_sets: 2 } : planned;
-    session.exercises.push(buildBlock(db.profile.id, sessionId, planned.exercise, order, prescribed, suggestions.get(planned.exercise_id) ?? null));
+    session.exercises.push(buildBlock(db.profile.id, sessionId, planned.exercise, order, planned, suggestions.get(planned.exercise_id) ?? null));
     order += 1;
   }
   db.sessions.unshift(session);
@@ -605,7 +601,11 @@ function buildBlock(
       set_index: index,
       weight_kg: suggestion?.weight_kg ?? null,
       reps: exercise.tracking_type === "time" || exercise.tracking_type === "distance" ? null : suggestion?.reps ?? planned?.target_reps_min ?? null,
-      duration_seconds: exercise.tracking_type === "time" ? suggestion?.duration_seconds ?? planned?.target_seconds ?? null : null,
+      duration_seconds: exercise.tracking_type === "time"
+        ? suggestion?.duration_seconds ?? planned?.target_seconds ?? null
+        : exercise.tracking_type === "distance"
+          ? planned?.target_seconds ?? suggestion?.duration_seconds ?? null
+          : null,
       distance_m: exercise.tracking_type === "distance" ? suggestion?.distance_m ?? null : null,
       rpe: null,
       is_warmup: false,

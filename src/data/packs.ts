@@ -14,15 +14,95 @@ export type WeekPack = {
   focus: string;
   summary: string;
   days: Array<{ weekday: number; packId: string }>;
+  program?: boolean;
 };
 
-function move(slug: string, sets: number, reps: number | [number, number] | null, rest: number, seconds: number | null = null): RoutineExercise {
+function move(slug: string, sets: number, reps: number | [number, number] | null, rest: number, seconds: number | null = null, note?: string): RoutineExercise {
   const repsMin = Array.isArray(reps) ? reps[0] : reps;
   const repsMax = Array.isArray(reps) ? reps[1] : reps;
-  return { slug, sets, repsMin, repsMax, seconds, rest };
+  return { slug, sets, repsMin, repsMax, seconds, rest, note };
+}
+
+function cardio(slug: string, minutes: number, note: string): RoutineExercise {
+  return { slug, sets: 1, repsMin: null, repsMax: null, seconds: minutes * 60, rest: 0, note };
 }
 
 export const DAY_PACKS: DayPack[] = [
+  {
+    id: "definida-lunes",
+    zone: "Empuje",
+    label: "Pecho, hombros y tríceps",
+    summary: "Los músculos que empujan. 18 series y 20 min de caminata inclinada al final.",
+    exercises: [
+      move("press-inclinado-mancuernas", 3, 10, 90, null, "Si está ocupado: press inclinado en máquina."),
+      move("press-banca", 3, [10, 12], 90, null, "Si está ocupado: mancuernas en banco plano o máquina de pecho."),
+      move("press-hombros", 3, 10, 90, null, "Sentado. Si está ocupado: máquina de hombros."),
+      move("elevaciones-laterales", 3, 15, 60, null, "Si está ocupado: elevación lateral en polea."),
+      move("extension-triceps", 3, 12, 60, null, "Con cuerda. Si está ocupado: barra recta."),
+      move("extension-polea-overhead", 3, 12, 60, null, "Si está ocupado: mancuerna a dos manos sobre la cabeza."),
+      cardio("caminadora", 20, "Caminata rápida con una inclinación que aguantes sin agarrarte."),
+    ],
+  },
+  {
+    id: "definida-martes",
+    zone: "Tirón",
+    label: "Espalda, bíceps y abdomen",
+    summary: "Espalda ancha, espalda media y bíceps, y un abdominal. 18 series y 20 min de bicicleta o elíptica.",
+    exercises: [
+      move("jalon-pecho", 3, [10, 12], 90, null, "Si está ocupado: dominadas asistidas."),
+      move("remo-sentado", 3, 12, 90, null, "Si está ocupado: remo en máquina."),
+      move("remo-mancuerna", 3, 10, 75, null, "10 por lado. Si está ocupado: remo con pecho apoyado en banco."),
+      move("curl-mancuernas", 3, 12, 60, null, "Si está ocupado: barra Z."),
+      move("curl-martillo", 3, 12, 60, null, "Si está ocupado: polea con cuerda."),
+      move("crunch-polea", 3, 15, 60, null, "Si está ocupado: máquina abdominal."),
+      cardio("bicicleta", 20, "Bicicleta o elíptica a ritmo moderado."),
+    ],
+  },
+  {
+    id: "definida-miercoles",
+    zone: "Hombros",
+    label: "Hombros y pecho",
+    summary: "Día más liviano y dinámico, sin piernas ni abdomen. Técnica y control, menos peso que el lunes. 15 series y 25 min de cardio variado.",
+    exercises: [
+      move("press-hombros-maquina", 3, 12, 75, null, "Peso moderado. Si está ocupada: mancuernas sentado."),
+      move("elevaciones-laterales", 3, 15, 60, null, "Si está ocupado: elevación lateral en polea."),
+      move("pajaros", 3, 15, 60, null, "Aperturas posteriores. Si está ocupado: peck deck invertido."),
+      move("face-pulls", 3, 15, 60, null, "Con cuerda. Si está ocupado: apertura posterior en máquina."),
+      move("peck-deck", 3, [12, 15], 60, null, "Si está ocupada: cruce de poleas."),
+      cardio("caminadora", 25, "5 min caminata suave, 5 caminata rápida, 5 bicicleta moderada, 5 bicicleta algo más rápida y 5 caminata suave. Sin sprints."),
+    ],
+  },
+  {
+    id: "definida-jueves",
+    zone: "Piernas",
+    label: "Piernas y glúteos",
+    summary: "Muslo delantero, trasero, glúteos y pantorrillas. 18 series y 10 a 15 min de cardio suave.",
+    exercises: [
+      move("prensa-piernas", 3, 12, 120, null, "Si está ocupada: sentadilla goblet."),
+      move("hip-thrust", 3, 12, 90, null, "Si está ocupado: puente de glúteo con mancuerna."),
+      move("curl-femoral-sentado", 3, 12, 75, null, "Si está ocupada: curl femoral acostado."),
+      move("extension-cuadriceps", 3, 12, 75, null, "Si está ocupada: sentadilla con mancuerna."),
+      move("abductores", 3, 15, 60, null, "Si está ocupada: banda elástica."),
+      move("elevaciones-pantorrillas", 3, 15, 45, null, "Si está ocupada: gemelos sentado."),
+      cardio("caminadora", 12, "Caminata suave de 10 a 15 min."),
+    ],
+  },
+  {
+    id: "definida-sabado",
+    zone: "Brazos",
+    label: "Torso, brazos, glúteos y abdomen",
+    summary: "Prioridad brazos. 21 series y 20 min de cardio moderado. Puedes alternar una serie de bíceps con una de tríceps para ahorrar tiempo.",
+    exercises: [
+      move("press-banca-mancuernas", 3, 10, 90, null, "Si está ocupado: máquina de pecho."),
+      move("jalon-agarre-cerrado", 3, 12, 90, null, "Agarre neutro. Si está ocupado: jalón convencional."),
+      move("hip-thrust", 3, 12, 90, null, "Moderado. Si está ocupado: puente de glúteo."),
+      move("curl-polea", 3, 12, 60, null, "Si está ocupada: curl con mancuernas."),
+      move("curl-martillo", 3, 12, 60, null, "Si está ocupado: mancuernas alternadas."),
+      move("extension-polea", 3, 12, 60, null, "Cuerda o barra."),
+      move("crunch", 3, 15, 45, null, "Si prefieres: máquina abdominal."),
+      cardio("eliptica", 20, "Elíptica o caminadora a ritmo moderado."),
+    ],
+  },
   {
     id: "atletico-lunes",
     zone: "Cuerpo completo",
@@ -293,10 +373,25 @@ export const DAY_PACKS: DayPack[] = [
 
 export const WEEK_PACKS: WeekPack[] = [
   {
+    id: "definida-8",
+    name: "Definida 5 días",
+    focus: "5 días · sugerida",
+    summary: "Lunes empuje, martes espalda y bíceps, miércoles hombros y pecho sin piernas, jueves piernas y glúteos, sábado torso y brazos. Viernes y domingo descanso. Siempre 3 series, con cardio al final.",
+    program: true,
+    days: [
+      { weekday: 1, packId: "definida-lunes" },
+      { weekday: 2, packId: "definida-martes" },
+      { weekday: 3, packId: "definida-miercoles" },
+      { weekday: 4, packId: "definida-jueves" },
+      { weekday: 6, packId: "definida-sabado" },
+    ],
+  },
+  {
     id: "atletico-8",
     name: "Atlético 8 semanas",
-    focus: "5 días · sugerida",
-    summary: "Lunes y viernes cuerpo completo, martes torso y brazos, miércoles piernas, sábado brazos, hombros y abdomen. Jueves y domingo descanso. Las dos primeras semanas, donde dice 3 series haces 2.",
+    focus: "5 días",
+    program: true,
+    summary: "Lunes y viernes cuerpo completo, martes torso y brazos, miércoles piernas, sábado brazos, hombros y abdomen. Jueves y domingo descanso.",
     days: [
       { weekday: 1, packId: "atletico-lunes" },
       { weekday: 2, packId: "atletico-martes" },
