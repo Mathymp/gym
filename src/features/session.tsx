@@ -11,6 +11,7 @@ import { humanError } from "@/lib/errors";
 import { formatClock, formatKg, formatMediumDate, formatMinutes } from "@/lib/format";
 import { effectiveSets, recordsInSession, sessionDurationMs, volumeOf } from "@/lib/metrics";
 import { newId } from "@/lib/utils";
+import { previousAdvice } from "@/lib/advice";
 import { type Exercise, type SessionExercise, type SessionTree, type TrackingType, type WorkoutSet } from "@/lib/types";
 import { ExerciseChoice } from "@/components/exercise-choice";
 import { FormaMark } from "@/components/forma-mark";
@@ -105,7 +106,8 @@ export function SessionScreen() {
   const plannedDay = plans.data?.find((item) => item.id === session.plan_id)?.days.find((item) => item.id === session.plan_day_id);
   const adviceFor = (exerciseId: string) => {
     const row = plannedDay?.exercises.find((item) => item.exercise_id === exerciseId);
-    return previousAdvice(entries.data ?? [], exerciseId, session.id, row ? { min: row.target_reps_min, max: row.target_reps_max } : null);
+    const equipment = session.exercises.find((block) => block.exercise_id === exerciseId)?.exercise.equipment ?? "";
+    return previousAdvice(entries.data ?? [], exerciseId, session.id, row ? { min: row.target_reps_min, max: row.target_reps_max } : null, equipment);
   };
   const upcomingAdvice = upcoming ? adviceFor(upcoming.block.exercise_id) : null;
   const dayZones = [...new Set(session.exercises.filter((block) => !block.replaced).map((block) => block.exercise.muscle_group))];
@@ -552,34 +554,6 @@ function validSet(tracking: TrackingType, set: WorkoutSet) {
   if (tracking === "reps") return (set.reps ?? 0) > 0;
   if (tracking === "time") return (set.duration_seconds ?? 0) > 0;
   return (set.distance_m ?? 0) > 0 || (set.duration_seconds ?? 0) > 0;
-}
-
-function previousAdvice(
-  entries: Array<{ exercise_id: string; session_id: string; started_at: string; weight_kg: number | null; reps: number | null; duration_seconds: number | null; is_warmup: boolean }>,
-  exerciseId: string,
-  sessionId: string,
-  target: { min: number | null; max: number | null } | null,
-) {
-  const rows = entries.filter((entry) => entry.exercise_id === exerciseId && entry.session_id !== sessionId && !entry.is_warmup);
-  if (rows.length === 0) return null;
-  const latest = rows[0].session_id;
-  const sets = rows.filter((entry) => entry.session_id === latest);
-  const dated = formatMediumDate(rows[0].started_at);
-  const reps = sets.map((entry) => entry.reps).filter((value): value is number => value != null);
-  const weight = sets.find((entry) => entry.weight_kg != null)?.weight_kg ?? null;
-  const seconds = sets.find((entry) => entry.duration_seconds)?.duration_seconds ?? null;
-  const line = weight != null && reps.length
-    ? `Antes, ${dated}: ${formatKg(weight)} × ${reps.join(", ")}`
-    : reps.length
-      ? `Antes, ${dated}: ${reps.join(", ")} reps`
-      : seconds
-        ? `Antes, ${dated}: ${seconds} s`
-        : null;
-  if (!line) return null;
-  let suggestion = "Parte con ese peso. Si completas el rango en todas las series, la próxima sube un poco.";
-  if (target?.max != null && reps.length > 0 && reps.every((value) => value >= target.max!)) suggestion = "La vez anterior llegaste al tope. Sube un poco el peso.";
-  else if (target?.min != null && reps.some((value) => value < target.min!)) suggestion = "La vez anterior te quedaste bajo el rango. Mantén el peso.";
-  return { line, suggestion };
 }
 
 function InsertHere({ resting, onClick }: { resting: boolean; onClick: () => void }) {
