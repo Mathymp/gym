@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
+import { MuscleLine } from "@/components/muscle-line";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ExerciseMotion } from "@/components/exercise-motion";
@@ -147,11 +148,13 @@ export function HomeScreen() {
 
       <section>
         {cover ? (
-          <ExerciseMotion slug={cover.slug} name={cover.name} muscle={cover.muscle_group} className="h-56 w-full rounded-[28px]" />
+          <ExerciseMotion slug={cover.slug} name={cover.name} muscle={cover.muscle_group} className="aspect-[16/10] w-full rounded-[28px] shadow-[0_18px_40px_rgba(18,32,51,0.16)]" />
         ) : (
           <div className="h-24 rounded-[28px] bg-raised" />
         )}
-        <p className="mt-4 text-xs font-medium tracking-[0.14em] text-muted uppercase">Hoy · {day ? WEEKDAY_LABELS[day.weekday] : "Sin rutina"}</p>
+        <p className="mt-5 text-xs font-semibold tracking-[0.14em] text-lime uppercase">
+          Hoy{day && day.weekday !== weekday ? ` · entreno del ${WEEKDAY_LABELS[day.weekday].toLowerCase()}` : ""}{!day ? " · sin rutina" : ""}
+        </p>
         <h2 className="mt-1 text-2xl font-semibold tracking-tight">{todayTitle}</h2>
         <p className="mt-1 text-sm text-muted">
           {day?.day_kind === "strength" ? `${day.exercises.length} ejercicios` : "Descanso"}
@@ -173,9 +176,12 @@ export function HomeScreen() {
 
       {day?.day_kind === "strength" ? (
         <section>
-          <h2 className="text-sm font-semibold text-muted">Ejercicios de hoy</h2>
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-lg font-semibold tracking-tight">Ejercicios de hoy</h2>
+            <span className="text-sm text-muted tabular">{day.exercises.length}</span>
+          </div>
           <ul className="mt-2">
-            {day.exercises.map((item) => {
+            {day.exercises.map((item, index) => {
               const sets = easy && item.target_sets >= 3 ? 2 : item.target_sets;
               const reps = item.target_seconds
                 ? `${item.target_seconds} s`
@@ -183,11 +189,14 @@ export function HomeScreen() {
                   ? `${item.target_reps_min}–${item.target_reps_max}`
                   : `${item.target_reps_min ?? item.target_reps_max ?? ""}`;
               return (
-                <li key={item.id} className="flex items-center gap-3 border-b border-line py-3">
-                  <ExerciseMotion slug={item.exercise.slug} name={item.exercise.name} muscle={item.exercise.muscle_group} labelled={false} className="h-20 w-28 shrink-0 rounded-xl" />
-                  <span className="min-w-0">
-                    <span className="block font-medium">{item.exercise.name}</span>
-                    <span className="text-sm text-muted">{sets} × {reps}</span>
+                <li key={item.id} className="enter flex items-center gap-3 border-b border-line py-3 last:border-b-0" style={{ "--i": index } as CSSProperties}>
+                  <ExerciseMotion slug={item.exercise.slug} name={item.exercise.name} muscle={item.exercise.muscle_group} labelled={false} className="aspect-[3/2] w-28 shrink-0 rounded-xl" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block leading-5 font-semibold">{item.exercise.name}</span>
+                    <MuscleLine exercise={item.exercise} className="mt-1" />
+                  </span>
+                  <span className="shrink-0 text-right text-sm font-semibold tabular">
+                    {sets}<span className="text-faint">×</span>{reps}
                   </span>
                 </li>
               );

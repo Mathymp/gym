@@ -4,7 +4,7 @@ import { useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type Re
 import { cn } from "@/lib/utils";
 
 const buttonStyles = cva(
-  "inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition-colors disabled:pointer-events-none disabled:opacity-40",
+  "inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition-[transform,background-color,box-shadow,color] duration-150 ease-out active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40",
   {
     variants: {
       variant: {
@@ -95,17 +95,17 @@ export function Sheet({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
-      <button className="absolute inset-0 bg-[#122033]/40" aria-label="Cerrar" onClick={onClose} />
+      <button className="sheet-backdrop absolute inset-0 bg-[#0b1526]/45 backdrop-blur-[2px]" aria-label="Cerrar" tabIndex={-1} onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="absolute inset-x-0 bottom-0 mx-auto max-h-[88dvh] w-full max-w-lg overflow-auto rounded-t-[28px] bg-surface px-4 pt-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-[0_-12px_40px_rgba(18,32,51,0.16)]"
+        className="sheet-panel absolute inset-x-0 bottom-0 mx-auto max-h-[88dvh] w-full max-w-lg overflow-auto overscroll-contain rounded-t-[28px] bg-surface px-4 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-[0_-12px_40px_rgba(18,32,51,0.18)]"
       >
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-line" />
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <button className="h-11 px-2 text-sm text-muted" onClick={onClose}>
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" aria-hidden />
+        <div className="sticky -top-3 z-10 -mx-4 mb-3 flex items-center justify-between gap-3 bg-surface px-4 pt-1 pb-2">
+          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+          <button className="h-10 rounded-full bg-raised px-4 text-sm font-semibold text-foreground active:scale-95 transition-transform" onClick={onClose} autoFocus>
             Cerrar
           </button>
         </div>
@@ -138,15 +138,15 @@ export function Stepper({
     onChange(Math.min(max, Math.max(min, next)));
   };
   return (
-    <div className="flex min-w-0 flex-1 items-center rounded-2xl bg-raised">
-      <button type="button" className="h-12 w-11 shrink-0 text-xl" aria-label={`Bajar ${label}`} onClick={() => change(-step)}>
+    <div className="flex h-14 min-w-0 flex-1 items-center rounded-2xl bg-raised">
+      <button type="button" className="h-full w-10 shrink-0 rounded-l-2xl text-xl text-muted transition-transform active:scale-90" aria-label={`Bajar ${label}`} onClick={() => change(-step)}>
         −
       </button>
       <label className="flex min-w-0 flex-1 flex-col items-center">
         <span className="sr-only">{label}</span>
         <input
           inputMode="decimal"
-          className="w-full min-w-0 bg-transparent text-center text-lg tabular outline-none"
+          className="w-full min-w-0 bg-transparent text-center text-lg leading-6 font-semibold tabular outline-none"
           value={value ?? ""}
           placeholder="0"
           onChange={(event) => {
@@ -155,9 +155,9 @@ export function Stepper({
             else if (/^\d*\.?\d*$/.test(raw)) onChange(Number(raw));
           }}
         />
-        <span className="text-[11px] text-faint">{unit}</span>
+        <span className="text-[11px] leading-3 text-faint">{unit}</span>
       </label>
-      <button type="button" className="h-12 w-11 shrink-0 text-xl" aria-label={`Subir ${label}`} onClick={() => change(step)}>
+      <button type="button" className="h-full w-10 shrink-0 rounded-r-2xl text-xl text-muted transition-transform active:scale-90" aria-label={`Subir ${label}`} onClick={() => change(step)}>
         +
       </button>
     </div>
@@ -165,7 +165,7 @@ export function Stepper({
 }
 
 export function Page({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("mx-auto flex w-full max-w-lg flex-col gap-8 px-4 pt-6 md:max-w-3xl md:px-8", className)}>{children}</div>;
+  return <div className={cn("enter mx-auto flex w-full max-w-lg flex-col gap-8 px-4 pt-6 md:max-w-3xl md:px-8", className)}>{children}</div>;
 }
 
 export function Kicker({ children }: { children: ReactNode }) {

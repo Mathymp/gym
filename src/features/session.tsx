@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Check, Repeat2 } from "lucide-react";
+import { ExerciseMuscles, MuscleMap } from "@/components/muscle-map";
+import { loadLevels, REGION_LABEL, sessionMuscleLoad, type MuscleLoad } from "@/lib/muscles";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button, InlineError, Sheet, Stepper } from "@/components/ui";
@@ -11,8 +14,7 @@ import { newId } from "@/lib/utils";
 import { type Exercise, type SessionExercise, type SessionTree, type TrackingType, type WorkoutSet } from "@/lib/types";
 import { ExerciseChoice } from "@/components/exercise-choice";
 import { FormaMark } from "@/components/forma-mark";
-import { ExerciseMotion } from "@/components/exercise-motion";
-import { MachineMotion } from "@/components/machine-motion";
+import { ExerciseDemo, ExerciseMotion } from "@/components/exercise-motion";
 import { MuscleLine } from "@/components/muscle-line";
 import { useEntries, useExercises, useHistory, usePlans, useProfile, useRefresh, useSession, useSetSession } from "@/features/use-data";
 
@@ -225,7 +227,7 @@ export function SessionScreen() {
               )}
             </div>
           ) : upcoming ? (
-            <ExerciseMotion steps slug={upcoming.block.exercise.slug} name={upcoming.block.exercise.name} muscle={upcoming.block.exercise.muscle_group} className="mb-3 aspect-[3/2] w-full rounded-2xl" />
+            <ExerciseMotion slug={upcoming.block.exercise.slug} name={upcoming.block.exercise.name} muscle={upcoming.block.exercise.muscle_group} className="mb-4 aspect-[16/10] w-full rounded-2xl" />
           ) : null}
           {restLeft > 0 ? null : upcoming ? (
             <div>
@@ -363,26 +365,38 @@ function ExerciseBlock({
   onRegister: (action: (() => void) | null) => void;
   onSubstitute: () => void;
 }) {
+  const doneCount = block.sets.filter((set) => set.completed_at).length;
+  const active = currentSetId != null && block.sets.some((set) => set.id === currentSetId);
   return (
-    <section className="rounded-[28px] bg-surface p-4 shadow-[0_10px_30px_rgba(18,32,51,0.06)]">
+    <section className={`rounded-[28px] bg-surface p-4 transition-shadow duration-300 ${active ? "shadow-[0_0_0_2px_rgba(29,78,216,0.9),0_16px_36px_rgba(29,78,216,0.16)]" : "shadow-[0_10px_30px_rgba(18,32,51,0.06)]"}`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-xl leading-6 font-semibold">{block.exercise.name}</h2>
-          <MuscleLine exercise={block.exercise} className="mt-1.5" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold tabular text-faint">
+            {doneCount} de {block.sets.length} series{active ? <span className="text-lime"> · ahora</span> : null}
+          </p>
+          <h2 className="mt-0.5 text-xl leading-6 font-semibold tracking-tight">{block.exercise.name}</h2>
           <p className="mt-1 text-xs text-faint">{block.exercise.equipment}</p>
         </div>
-        <Button variant="surface" size="md" onClick={onSubstitute}>Cambiar</Button>
+        <button type="button" className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-raised px-3 text-xs font-semibold text-foreground transition-transform active:scale-95" onClick={onSubstitute}>
+          <Repeat2 size={14} aria-hidden />
+          Cambiar
+        </button>
       </div>
-      <MachineMotion compact slug={block.exercise.slug} name={block.exercise.name} muscle={block.exercise.muscle_group} />
-      <p className="mt-2 text-sm leading-5"><span className="font-semibold text-lime">Consejo. </span>{block.exercise.instructions}</p>
-      {block.exercise.common_mistakes ? <p className="mt-1 text-sm leading-5 text-muted"><span className="font-semibold">Evita. </span>{block.exercise.common_mistakes}</p> : null}
+      <ExerciseDemo exercise={block.exercise} className="mt-3" />
+      <div className="mt-4 rounded-2xl bg-background p-3">
+        <p className="mb-2 text-[10px] font-semibold tracking-[0.14em] text-faint uppercase">Zona que trabaja</p>
+        <ExerciseMuscles exercise={block.exercise} />
+      </div>
+      {block.exercise.common_mistakes ? (
+        <p className="mt-3 text-sm leading-5 text-muted"><span className="font-semibold text-warning">Evita. </span>{block.exercise.common_mistakes}</p>
+      ) : null}
       {previous ? (
-        <div className="mt-2">
+        <div className="mt-3 border-l-2 border-lime pl-3">
           <p className="text-sm">{previous.line}</p>
-          <p className="mt-1 text-sm font-semibold">{previous.suggestion}</p>
+          <p className="mt-0.5 text-sm font-semibold">{previous.suggestion}</p>
         </div>
       ) : (
-        <p className="mt-2 text-sm text-faint">Sin marca anterior de este ejercicio, en ningún día.</p>
+        <p className="mt-3 text-sm text-faint">Sin marca anterior de este ejercicio.</p>
       )}
       <div className="mt-3 flex flex-col gap-2">
         {block.sets.map((set) => (
@@ -481,9 +495,16 @@ function SetRow({
   }
 
   return (
-    <div className={`rounded-2xl px-2 py-2 ${done ? "bg-raised" : ""}`}>
+    <div className={`rounded-2xl px-2 py-2 transition-colors duration-300 ${done ? "set-done" : current ? "bg-lime/5 ring-1 ring-lime/25" : ""}`}>
       <div className="mb-1 flex items-center justify-between text-xs text-faint">
-        <span>Serie {set.set_index}</span>
+        <span className="flex items-center gap-1.5 font-semibold">
+          {done ? (
+            <span className="pop flex h-5 w-5 items-center justify-center rounded-full bg-lime text-white" aria-hidden>
+              <Check size={12} strokeWidth={3} />
+            </span>
+          ) : null}
+          <span className={done ? "text-foreground" : current ? "text-lime" : undefined}>Serie {set.set_index}{done ? " · hecha" : ""}</span>
+        </span>
         <button
           className={`h-8 px-2 ${set.is_warmup ? "text-warning" : "text-faint"}`}
           onClick={() => void persist({ is_warmup: !set.is_warmup }, done).catch((caught) => toast.error(humanError(caught)))}
@@ -498,12 +519,11 @@ function SetRow({
         {tracking === "weight_reps" || tracking === "reps" ? <Stepper label="Repeticiones" unit="reps" step={1} max={200} value={reps} onChange={setReps} /> : null}
         {tracking === "time" ? <Stepper label="Segundos" unit="s" step={5} max={3600} value={seconds} onChange={setSeconds} /> : null}
         {tracking === "distance" ? <Stepper label="Distancia" unit="m" step={100} max={100000} value={distance} onChange={setDistance} /> : null}
-        {done ? <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-lime text-lg font-semibold text-white" aria-label="Serie hecha">✓</span> : null}
       </div>
       {!done && current ? (
         <button
           type="button"
-          className="mt-2 h-12 w-full rounded-2xl bg-lime text-sm font-semibold text-white"
+          className="mt-2 h-12 w-full rounded-2xl bg-lime text-sm font-semibold text-white transition-transform active:scale-[0.98]"
           onClick={() => void persist({}, true).catch((caught) => toast.error(humanError(caught)))}
         >
           Ya hice la serie
@@ -653,7 +673,7 @@ function Summary({
   const previousVolume = previous ? volumeOf(previous.exercises.flatMap((block) => block.sets)) : null;
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 pt-8 pb-16">
+    <div className="enter mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-6 px-4 pt-[max(2rem,calc(env(safe-area-inset-top)+1rem))] pb-[calc(4rem+env(safe-area-inset-bottom))]">
       <p className="text-xs tracking-[0.16em] text-muted uppercase">Resumen</p>
       <h1 className="text-4xl font-semibold tracking-tight">{session.title}</h1>
       <dl className="grid grid-cols-2 gap-x-6 border-t border-line">
@@ -663,6 +683,7 @@ function Summary({
         <div className="border-b border-line py-4"><dt className="text-xs text-faint">Volumen</dt><dd className="text-2xl font-semibold tabular">{formatKg(volume)}</dd></div>
       </dl>
       <p className="text-sm text-muted">Las series de calentamiento no entran en las series efectivas ni en el volumen.</p>
+      <MuscleSummary load={sessionMuscleLoad(session.exercises)} />
       {records.length > 0 ? (
         <section>
           <h2 className="text-lg font-semibold">Récords de esta sesión</h2>
@@ -685,6 +706,41 @@ function Summary({
       ) : null}
       <Button asChild size="lg"><Link to="/">Volver al inicio</Link></Button>
     </div>
+  );
+}
+
+function MuscleSummary({ load }: { load: MuscleLoad[] }) {
+  if (load.length === 0) {
+    return <p className="text-sm text-muted">No marcaste series efectivas, así que no hay zonas trabajadas que mostrar.</p>;
+  }
+  const top = Math.max(1, ...load.map((item) => item.direct + item.support / 2));
+  return (
+    <section className="rounded-[28px] bg-surface p-4 shadow-[0_10px_30px_rgba(18,32,51,0.06)]">
+      <h2 className="text-lg font-semibold tracking-tight">Zonas trabajadas</h2>
+      <p className="mt-0.5 text-sm text-muted">Más rojo, más series en esa zona.</p>
+      <MuscleMap levels={loadLevels(load)} className="mx-auto mt-4 w-full max-w-[15rem]" />
+      <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-muted" aria-hidden>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#fbc4c4]" />Apoyo</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#f48a8c]" />Medio</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#e5484d]" />Foco</span>
+      </div>
+      <ul className="mt-4 flex flex-col gap-2.5">
+        {load.map((item, index) => (
+          <li key={item.region} className="enter grid grid-cols-[6.5rem_1fr_4.75rem] items-center gap-3 text-sm" style={{ "--i": index } as CSSProperties}>
+            <span className="truncate font-medium">{REGION_LABEL[item.region]}</span>
+            <span className="h-2 overflow-hidden rounded-full bg-raised" aria-hidden>
+              <span
+                className={`block h-full rounded-full ${item.direct ? "bg-[#e5484d]" : "bg-[#fbc4c4]"}`}
+                style={{ width: `${Math.max(8, ((item.direct + item.support / 2) / top) * 100)}%` }}
+              />
+            </span>
+            <span className="text-right text-xs tabular text-muted">
+              {item.direct ? `${item.direct} ${item.direct === 1 ? "serie" : "series"}` : `apoyo en ${item.support}`}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
+import { Search } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button, EmptyState, InlineError, Kicker, Page, Sheet, TextField } from "@/components/ui";
@@ -25,8 +26,8 @@ import { dayKindLabel } from "@/lib/metrics";
 import { newId } from "@/lib/utils";
 import { MUSCLE_LABEL, type DayKind, type Exercise, type MuscleGroup, type PlanDay, type PlanExercise, type TrackingType } from "@/lib/types";
 import { ExerciseChoice } from "@/components/exercise-choice";
-import { ExerciseMotion } from "@/components/exercise-motion";
-import { MachineMotion } from "@/components/machine-motion";
+import { ExerciseDemo, ExerciseMotion } from "@/components/exercise-motion";
+import { ExerciseMuscles } from "@/components/muscle-map";
 import { MuscleLine } from "@/components/muscle-line";
 import { programPhase } from "@/lib/program";
 import { useActivePlan, useExercises, useOpenSession, usePlans, useRefresh } from "@/features/use-data";
@@ -97,7 +98,7 @@ export function TrainScreen() {
             <li key={day.id}>
               <Link className="flex min-h-[4.5rem] items-center gap-3 rounded-[24px] bg-surface py-3 pr-3 pl-3 shadow-[0_8px_24px_rgba(18,32,51,0.05)]" to={`/entrenar/rutina/${plan.id}?dia=${day.id}`}>
                 {day.exercises[0] ? (
-                  <ExerciseMotion slug={day.exercises[0].exercise.slug} name={day.exercises[0].exercise.name} muscle={day.exercises[0].exercise.muscle_group} labelled={false} className="h-16 w-24 shrink-0 rounded-xl" />
+                  <ExerciseMotion slug={day.exercises[0].exercise.slug} name={day.exercises[0].exercise.name} muscle={day.exercises[0].exercise.muscle_group} labelled={false} className="aspect-[3/2] w-24 shrink-0 rounded-xl" />
                 ) : (
                   <span className="h-14 w-14 shrink-0 rounded-xl bg-raised" aria-hidden />
                 )}
@@ -445,7 +446,17 @@ export function LibraryScreen() {
     <Page className="gap-4">
       <Link className="text-sm font-semibold text-lime" to="/entrenar">Volver</Link>
       <h1 className="text-3xl font-semibold tracking-tight">Ejercicios</h1>
-      <TextField label="Buscar" value={query} onChange={(event) => setQuery(event.target.value)} />
+      <label className="relative block">
+        <span className="sr-only">Buscar ejercicio</span>
+        <Search size={18} className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-faint" aria-hidden />
+        <input
+          type="search"
+          value={query}
+          placeholder="Buscar ejercicio"
+          className="h-12 w-full rounded-2xl bg-surface pr-4 pl-11 text-base shadow-[0_6px_18px_rgba(18,32,51,0.05)] ring-1 ring-line outline-none placeholder:text-faint focus:ring-2 focus:ring-lime"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </label>
       <div className="no-scrollbar flex gap-2 overflow-auto pb-1">
         <FilterChip label="Todos" selected={group === "todos"} onClick={() => setGroup("todos")} />
         {(Object.keys(MUSCLE_LABEL) as MuscleGroup[]).map((item) => (
@@ -453,19 +464,23 @@ export function LibraryScreen() {
         ))}
       </div>
       {featured ? (
-        <button type="button" className="overflow-hidden rounded-[28px] bg-surface text-left shadow-[0_10px_30px_rgba(18,32,51,0.06)]" onClick={() => setOpen(featured)}>
-          <MachineMotion slug={featured.slug} name={featured.name} muscle={featured.muscle_group} />
-          <span className="block px-4 pt-3 text-lg font-semibold">{featured.name}</span>
-          <span className="block px-4 text-sm text-muted">{MUSCLE_LABEL[featured.muscle_group]} · {featured.equipment}</span>
-          <span className="block px-4 pb-4 pt-2 text-sm leading-5 text-foreground"><span className="font-semibold text-lime">Consejo. </span>{featured.instructions}</span>
+        <button type="button" className="enter overflow-hidden rounded-[28px] bg-surface p-2 text-left shadow-[0_10px_30px_rgba(18,32,51,0.06)] transition-transform active:scale-[0.99]" onClick={() => setOpen(featured)}>
+          <ExerciseMotion slug={featured.slug} name={featured.name} muscle={featured.muscle_group} className="aspect-[16/10] w-full rounded-[22px]" />
+          <span className="flex items-start justify-between gap-3 px-2 pt-3 pb-2">
+            <span className="min-w-0">
+              <span className="block text-lg leading-6 font-semibold tracking-tight">{featured.name}</span>
+              <MuscleLine exercise={featured} className="mt-1.5" />
+            </span>
+            <span className="shrink-0 pt-1 text-xs font-semibold text-lime">Ver pasos</span>
+          </span>
         </button>
       ) : (
         <EmptyState title="Sin resultados" body="Prueba otro nombre o crea un ejercicio propio." />
       )}
       <ul className="flex flex-col gap-2">
-        {rest.map((exercise) => (
-          <li key={exercise.id}>
-            <button className="flex min-h-16 w-full items-center gap-3 rounded-2xl bg-surface py-2 pr-4 pl-2 text-left shadow-[0_8px_20px_rgba(18,32,51,0.04)]" onClick={() => setOpen(exercise)}>
+        {rest.map((exercise, index) => (
+          <li key={exercise.id} className="enter" style={{ "--i": Math.min(index, 10) } as CSSProperties}>
+            <button className="flex min-h-16 w-full items-center gap-3 rounded-2xl bg-surface py-2 pr-4 pl-2 text-left shadow-[0_8px_20px_rgba(18,32,51,0.04)] transition-transform active:scale-[0.99]" onClick={() => setOpen(exercise)}>
               <ExerciseMotion slug={exercise.slug} name={exercise.name} muscle={exercise.muscle_group} labelled={false} className="aspect-[3/2] w-28 shrink-0 rounded-xl" />
               <span className="min-w-0">
                 <span className="block font-semibold leading-5">{exercise.name}</span>
@@ -478,7 +493,7 @@ export function LibraryScreen() {
       </ul>
       <Button size="lg" variant="surface" onClick={() => setCreating(true)}>Crear ejercicio</Button>
       <Sheet open={Boolean(open)} title={open?.name ?? ""} onClose={() => setOpen(null)}>
-        {open ? <ExerciseDetail exercise={open} /> : null}
+        {open ? <ExerciseDetail exercise={open} catalog={exercises.data ?? []} onOpen={setOpen} /> : null}
       </Sheet>
       <Sheet open={creating} title="Ejercicio propio" onClose={() => setCreating(false)}>
         <CustomExerciseForm onDone={() => { setCreating(false); void exercises.refetch(); }} />
@@ -489,32 +504,43 @@ export function LibraryScreen() {
 
 function FilterChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
-    <button type="button" className={`h-10 shrink-0 rounded-full px-4 text-sm font-semibold ${selected ? "bg-lime text-white" : "bg-surface text-foreground"}`} onClick={onClick}>
+    <button type="button" aria-pressed={selected} className={`h-10 shrink-0 rounded-full px-4 text-sm font-semibold transition-[background-color,color,transform] duration-200 active:scale-95 ${selected ? "bg-lime text-white shadow-[0_6px_14px_rgba(29,78,216,0.28)]" : "bg-surface text-foreground"}`} onClick={onClick}>
       {label}
     </button>
   );
 }
 
-function ExerciseDetail({ exercise }: { exercise: Exercise }) {
-  const alternatives = exercise.alternative_slugs.join(", ");
+function ExerciseDetail({ exercise, catalog, onOpen }: { exercise: Exercise; catalog: Exercise[]; onOpen: (exercise: Exercise) => void }) {
+  const alternatives = exercise.alternative_slugs
+    .map((slug) => catalog.find((item) => item.slug === slug))
+    .filter((item): item is Exercise => Boolean(item));
   return (
-    <div className="flex flex-col gap-4 text-sm leading-6">
-      <p className="text-muted">{MUSCLE_LABEL[exercise.muscle_group]} · {exercise.equipment}</p>
-      <MachineMotion slug={exercise.slug} name={exercise.name} muscle={exercise.muscle_group} />
-      {exercise.machine_name ? <p>Máquina: {exercise.machine_name}</p> : null}
-      {exercise.secondary_muscles.length > 0 ? <p>También: {exercise.secondary_muscles.join(", ")}</p> : null}
-      <div className="rounded-2xl bg-raised px-4 py-3">
-        <p className="text-xs font-semibold tracking-wide text-lime">Consejo</p>
-        <p className="mt-1">{exercise.instructions}</p>
+    <div className="flex flex-col gap-5 text-sm leading-6">
+      <p className="-mt-2 text-muted">{exercise.machine_name ?? exercise.equipment}</p>
+      <ExerciseDemo exercise={exercise} />
+      <div className="rounded-2xl bg-background p-3">
+        <p className="mb-2 text-[10px] font-semibold tracking-[0.14em] text-faint uppercase">Zona que trabaja</p>
+        <ExerciseMuscles exercise={exercise} />
       </div>
       {exercise.common_mistakes ? (
-        <div className="rounded-2xl border border-line px-4 py-3">
-          <p className="text-xs font-semibold tracking-wide text-warning">Evita</p>
-          <p className="mt-1 text-muted">{exercise.common_mistakes}</p>
-        </div>
+        <p className="leading-5 text-muted"><span className="font-semibold text-warning">Evita. </span>{exercise.common_mistakes}</p>
       ) : null}
-      {alternatives ? <p>Alternativas: {alternatives}</p> : null}
-      <Link className="font-semibold text-lime" to={`/progreso/fuerza/${exercise.id}`}>Ver progreso</Link>
+      {alternatives.length ? (
+        <section>
+          <h3 className="text-xs font-semibold tracking-[0.14em] text-faint uppercase">Si está ocupada</h3>
+          <ul className="no-scrollbar -mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+            {alternatives.map((item) => (
+              <li key={item.id} className="w-36 shrink-0">
+                <button type="button" className="w-full text-left transition-transform active:scale-[0.98]" onClick={() => onOpen(item)}>
+                  <ExerciseMotion slug={item.slug} name={item.name} muscle={item.muscle_group} labelled={false} className="aspect-[3/2] w-full rounded-xl" />
+                  <span className="mt-1.5 block text-xs leading-4 font-semibold">{item.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      <Link className="flex h-12 items-center justify-center rounded-2xl bg-raised font-semibold text-lime transition-transform active:scale-[0.98]" to={`/progreso/fuerza/${exercise.id}`}>Ver mi progreso en este ejercicio</Link>
     </div>
   );
 }
